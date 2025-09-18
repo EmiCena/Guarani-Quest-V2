@@ -1,0 +1,31 @@
+<!-- learning/templates/learning/partials/exercise_matching.html -->
+<div class="card exercise" id="matching-{{ ex.id }}">
+  <h4>{{ ex.instructions }}</h4>
+  <div class="grid-two">
+    <div>
+      <strong>Español</strong>
+      <ul>
+        {% for pair in ex.pairs.all %}
+          <li data-left="{{ pair.left_text }}">{{ pair.left_text }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <strong>Guaraní</strong>
+      <ul>
+        {% for pair in ex.pairs.all %}
+          <li>
+            <select class="match-right" data-left="{{ pair.left_text }}">
+              <option value="">--Selecciona--</option>
+              {% for p in ex.pairs.all %}
+                <option value="{{ p.right_text }}">{{ p.right_text }}</option>
+              {% endfor %}
+            </select>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <button class="btn" onclick="submitMatching({{ ex.id }})">Enviar</button>
+  <div class="feedback"></div>
+</div>

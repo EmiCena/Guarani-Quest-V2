@@ -1,0 +1,17 @@
+<!-- learning/templates/learning/partials/pronunciation.html -->
+<div class="card exercise" id="pronun-{{ ex.id }}">
+  <h4>Pronuncia: <em>{{ ex.text_guarani }}</em></h4>
+  {% if ex.reference_audio %}
+    <div><small>Referencia:</small><br><audio controls src="{{ ex.reference_audio.url }}"></audio></div>
+  {% endif %}
+  <div class="pronun-controls">
+    <button class="btn" onclick="startPronunciation('{{ ex.id }}', `{{ ex.text_guarani }}`)">Grabar</button>
+    <button class="btn btn-secondary" onclick="stopPronunciation('{{ ex.id }}')">Detener</button>
+  </div>
+  <div class="pronun-feedback">
+    <div>Exactitud: <span id="acc-{{ ex.id }}">0</span>%</div>
+    <div>Fluidez: <span id="flu-{{ ex.id }}">0</span>%</div>
+    <div>Integridad: <span id="comp-{{ ex.id }}">0</span>%</div>
+    <div class="progress"><div class="bar" id="bar-{{ ex.id }}" style="width: 0%"></div></div>
+  </div>
+</div>

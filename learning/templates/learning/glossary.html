@@ -1,0 +1,16 @@
+<!-- learning/templates/learning/glossary.html -->
+{% extends "base.html" %}
+{% block content %}
+  <h2>Tu Glosario</h2>
+  <div class="glossary-form">
+    <input id="gloss-source" type="text" placeholder="Palabra o frase en español" />
+    <button class="btn" onclick="translateAndAdd()">Traducir y Agregar</button>
+  </div>
+  <ul class="glossary-list" id="glossary-list">
+    {% for e in entries %}
+      <li><strong>{{ e.source_text_es }}</strong> → {{ e.translated_text_gn }} {% if e.notes %}<em>({{ e.notes }})</em>{% endif %}</li>
+    {% empty %}
+      <li>Aún no has agregado palabras.</li>
+    {% endfor %}
+  </ul>
+{% endblock %}

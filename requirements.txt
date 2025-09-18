@@ -1,0 +1,9 @@
+# requirements.txt
+Django==4.2.13
+djangorestframework==3.15.2
+python-dotenv==1.0.1
+google-cloud-translate==2.0.1
+requests==2.32.3
+psycopg2-binary==2.9.9
+Pillow==10.4.0
+whitenoise==6.7.0

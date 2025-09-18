@@ -1,0 +1,16 @@
+/* learning/static/css/styles.css */
+body { font-family: system-ui, Arial, sans-serif; margin: 0; }
+.container { width: 95%; max-width: 1000px; margin: 0 auto; }
+.navbar { background: #0a5; color: white; padding: 10px 0; }
+.navbar .brand { color: white; text-decoration: none; font-weight: bold; }
+.navbar .nav-right { list-style: none; display: flex; gap: 15px; margin: 0; }
+.navbar .nav-right a { color: white; text-decoration: none; }
+.card { background: #fff; border: 1px solid #eee; padding: 15px; margin: 10px 0; border-radius: 6px; }
+.btn { background: #0a5; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
+.btn-secondary { background: #666; }
+.progress { width: 100%; background: #eee; border-radius: 4px; overflow: hidden; height: 10px; margin: 5px 0;}
+.progress .bar { background: #0a5; height: 10px; width: 0%; transition: width .3s; }
+.badge { display: inline-block; background: #0a5; color: white; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.section { background: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
+.lessons-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 12px; }

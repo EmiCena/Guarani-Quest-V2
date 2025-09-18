@@ -1,0 +1,8 @@
+<!-- learning/templates/learning/partials/exercise_fillblank.html -->
+<div class="card exercise" id="fillblank-{{ ex.id }}">
+  <h4>Completa la frase</h4>
+  <p>{{ ex.prompt_text }}</p>
+  <input type="text" name="answer" placeholder="Tu respuesta" />
+  <button class="btn" onclick="submitFillBlank({{ ex.id }})">Enviar</button>
+  <div class="feedback"></div>
+</div>

@@ -1,0 +1,37 @@
+<!-- learning/templates/learning/lesson_detail.html -->
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+  <h1>{{ lesson.title }}</h1>
+  <p>{{ lesson.description }}</p>
+
+  {% for section in sections %}
+    <section class="section">
+      <h4>{{ section.title }}</h4>
+      <p>{{ section.body }}</p>
+      {% if section.reference_audio %}
+        <audio controls src="{{ section.reference_audio.url }}"></audio>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  <h3>Ejercicios Escritos</h3>
+  {% for ex in fillblanks %}
+    {% include "learning/partials/exercise_fillblank.html" with ex=ex %}
+  {% endfor %}
+  {% for ex in mcqs %}
+    {% include "learning/partials/exercise_mcq.html" with ex=ex %}
+  {% endfor %}
+  {% for ex in matchings %}
+    {% include "learning/partials/exercise_matching.html" with ex=ex %}
+  {% endfor %}
+
+  <h3>Práctica Oral</h3>
+  {% for ex in pronun_exercises %}
+    {% include "learning/partials/pronunciation.html" with ex=ex %}
+  {% empty %}
+    <p>No hay ejercicios de pronunciación en esta lección.</p>
+  {% endfor %}
+
+  <script src="{% static 'js/pronunciation.js' %}"></script>
+{% endblock %}

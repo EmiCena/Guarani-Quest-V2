@@ -1,0 +1,12 @@
+<!-- learning/templates/learning/partials/exercise_mcq.html -->
+<div class="card exercise" id="mcq-{{ ex.id }}">
+  <h4>Elige la respuesta correcta</h4>
+  <p>{{ ex.question_text }}</p>
+  {% for opt in ex.choices_json %}
+    <label>
+      <input type="radio" name="mcq-{{ ex.id }}" value="{{ opt.key }}"> {{ opt.key }}) {{ opt.text }}
+    </label><br>
+  {% endfor %}
+  <button class="btn" onclick="submitMCQ({{ ex.id }})">Enviar</button>
+  <div class="feedback"></div>
+</div>

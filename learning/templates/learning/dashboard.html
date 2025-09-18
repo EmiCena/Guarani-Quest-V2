@@ -1,0 +1,34 @@
+<!-- learning/templates/learning/dashboard.html -->
+{% extends "base.html" %}
+{% load dict_extras %}
+{% block content %}
+  <h1>Tu Panel</h1>
+  <div class="stats">
+    <div>Entradas en tu Glosario: {{ glossary_count }}</div>
+  </div>
+  <h3>Tus Lecciones</h3>
+  <div class="lessons-grid">
+    {% for lesson in lessons %}
+      {% with lp=progress_map|get_item:lesson.id %}
+      <div class="card">
+        <h4>{{ lesson.title }}</h4>
+        <p>{{ lesson.description|default:"" }}</p>
+        {% if lp %}
+          <div class="progress">
+            <div class="bar" style="width: {{ lp.progress_percent|floatformat:0 }}%"></div>
+          </div>
+          <small>Progreso: {{ lp.progress_percent|floatformat:1 }}%</small><br>
+          <small>Escrito: {{ lp.written_score|floatformat:1 }}% | Pronunciación: {{ lp.pronunciation_confidence|floatformat:1 }}%</small>
+          {% if lp.completed %}<div class="badge">Completado</div>{% endif %}
+        {% else %}
+          <div class="progress"><div class="bar" style="width: 0%"></div></div>
+          <small>Progreso: 0%</small>
+        {% endif %}
+        <div><a class="btn" href="{% url 'lesson_detail' lesson.id %}">Ir a la lección</a></div>
+      </div>
+      {% endwith %}
+    {% empty %}
+      <p>No hay lecciones aún.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
