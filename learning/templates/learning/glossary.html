@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/flashcards.css' %}">
 {% endblock %}
@@ -11,14 +12,13 @@
   </section>
 
   <div style="max-width:760px;margin:0 auto 14px;">
-    <input id="glossary-search" type="text" placeholder="Buscar palabras en guaraní o español…" oninput="qxFilterGlossary()">
+    <input id="glossary-search" type="text" placeholder="Buscar en guaraní o español…" oninput="qxFilterGlossary()">
   </div>
 
   <div id="flash-grid" class="flash-grid">
     {% for e in entries %}
       <div class="flash" tabindex="0" data-es="{{ e.source_text_es|lower }}" data-gn="{{ e.translated_text_gn|lower }}">
         <div class="flash-inner">
-          <!-- Frente (Guaraní) -->
           <div class="face face-front">
             <div class="tag">Guaraní</div>
             <h3 class="word">{{ e.translated_text_gn }}</h3>
@@ -31,13 +31,10 @@
               {% endif %}
             </div>
           </div>
-
-          <!-- Reverso (Español + grabación) -->
           <div class="face face-back">
             <div class="tag">Español</div>
             <h3 class="word">{{ e.source_text_es }}</h3>
             {% if e.notes %}<div class="sub">“{{ e.notes }}”</div>{% endif %}
-
             <div class="rec-controls" id="rec-{{ e.id }}">
               <button class="qx-btn btn-sm" onclick="startRec({{ e.id }})">● Grabar</button>
               <button class="qx-btn qx-outline btn-sm" onclick="stopRec({{ e.id }})">■ Detener</button>
@@ -49,7 +46,7 @@
         </div>
       </div>
     {% empty %}
-      <div class="card">Aún no has agregado palabras. Usa los campos de abajo.</div>
+      <div class="card">Aún no has agregado palabras.</div>
     {% endfor %}
   </div>
 
@@ -58,9 +55,9 @@
     <input id="manual-gn" type="text" placeholder="Guaraní">
     <button class="qx-btn" onclick="addManual()">Agregar</button>
   </div>
+{% endblock %}
 
-  {% block extra_js %}
-    <script src="{% static 'js/glossary.js' %}"></script>
-    <script src="{% static 'js/flashcards.js' %}"></script>
-  {% endblock %}
+{% block extra_js %}
+  <script src="{% static 'js/glossary.js' %}"></script>
+  <script src="{% static 'js/flashcards.js' %}"></script>
 {% endblock %}

@@ -1,48 +1,59 @@
 {% extends "base.html" %}
 {% load static %}
+
 {% block content %}
   <h2 style="margin:8px 0 14px;">Repaso (SRS) — {{ deck.name }}</h2>
 
   <div class="card srs-toolbar">
-    <div class="segment" role="tablist" aria-label="Modo de estudio">
+    <div class="seg">
       <button class="seg-btn" id="mode-beginner"   onclick="setMode('beginner')">Beginner</button>
       <button class="seg-btn" id="mode-comfortable" onclick="setMode('comfortable')">Comfortable</button>
       <button class="seg-btn" id="mode-aggressive" onclick="setMode('aggressive')">Aggressive</button>
     </div>
 
-    <div style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+    <div class="srs-stats">
       <div class="gauge" id="gauge" style="--val:0;"><span id="gauge-text">0%</span></div>
-      <div class="counter">Nuevas hoy: <b><span id="new-count">0</span>/<span id="new-limit">0</span></b></div>
-      <div class="counter">Vencidas: <b><span id="due-count">0</span></b></div>
-      <button class="btn-secondary btn-sm" onclick="toggleReverse()">Modo inverso</button>
+      <div class="stat"><span class="k">Nuevas hoy:</span> <b><span id="new-count">0</span>/<span id="new-limit">0</span></b></div>
+      <div class="stat"><span class="k">Vencidas:</span> <b><span id="due-count">0</span></b></div>
+      <button class="pill" onclick="toggleReverse()">Modo inverso</button>
     </div>
+
     <div class="tip">Atajos: Space = mostrar · 0–5 = calificar · Enter/N = siguiente</div>
   </div>
 
-  <div class="card" id="srs-card" style="min-height:180px;">
-    <div id="front" style="font-size:22px;font-weight:800;">Cargando...</div>
-    <div id="back" style="display:none;margin-top:12px;font-size:18px;color:var(--muted);"></div>
-    <div id="notes" style="display:none;margin-top:6px;color:var(--muted);"></div>
-  </div>
+  <div class="card srs-card" id="srs-card">
+    <div id="srs-loader" class="loader hidden">
+      <div class="spinner"></div>
+      <div class="msg">
+        <div id="loader-title">Cargando tarjetas…</div>
+        <div id="loader-sub">Esto puede tardar algunos segundos la primera vez.</div>
+      </div>
+    </div>
 
-  <div style="margin:12px 0; display:flex; gap:10px; flex-wrap: wrap;">
-    <button class="btn" onclick="srsShow()">Mostrar respuesta</button>
-    <button class="btn-secondary" onclick="srsSkip()">Saltar</button>
-  </div>
-
-  <div id="grades" style="display:none;">
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      <button class="btn-secondary" onclick="srsGrade(0)">0</button>
-      <button class="btn-secondary" onclick="srsGrade(1)">1</button>
-      <button class="btn-secondary" onclick="srsGrade(2)">2</button>
-      <button class="btn-secondary" onclick="srsGrade(3)">3</button>
-      <button class="btn-outline"   onclick="srsGrade(4)">4</button>
-      <button class="btn"           onclick="srsGrade(5)">5 Perfecto</button>
+    <div id="front" class="srs-front">Cargando…</div>
+    <div id="back" class="srs-back" style="display:none;"></div>
+    <div id="notes" class="srs-notes" style="display:none;"></div>
+    <div id="grades" class="srs-grades" style="display:none;">
+      <button class="qx-btn qx-outline btn-sm" onclick="srsGrade(0)">0</button>
+      <button class="qx-btn qx-outline btn-sm" onclick="srsGrade(1)">1</button>
+      <button class="qx-btn qx-outline btn-sm" onclick="srsGrade(2)">2</button>
+      <button class="qx-btn qx-outline btn-sm" onclick="srsGrade(3)">3</button>
+      <button class="qx-btn qx-outline btn-sm" onclick="srsGrade(4)">4</button>
+      <button class="qx-btn btn-sm" onclick="srsGrade(5)">5 Perfecto</button>
     </div>
   </div>
 
-  {% block extra_js %}
-    <script src="{% static 'js/srs.js' %}"></script>
-    <script> srsInit(); </script>
-  {% endblock %}
+  <div class="srs-actions">
+    <button class="qx-btn" onclick="srsShow()">Mostrar respuesta</button>
+    <button class="qx-btn qx-outline" onclick="srsSkip()">Saltar</button>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/srs.js' %}"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', function(){
+      if (window.srsInit) srsInit();
+    });
+  </script>
 {% endblock %}

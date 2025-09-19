@@ -135,3 +135,34 @@ input:focus,select:focus,textarea:focus{border-color:#a7f3d0;box-shadow:0 0 0 3p
   display: grid; place-items: center; font-weight: 900; color: #fff;
   background: linear-gradient(135deg, var(--green), #86efac); box-shadow: var(--shadow);
 }
+
+/* Tema oscuro para navbar verde */
+:root[data-theme="dark"] {
+  --bg: #0b1020;            /* fondo principal */
+  --card: #0f172a;          /* tarjetas/paneles */
+  --surface: #0f172a;       /* si usas surface */
+  --surface-2: #111827;     /* variante */
+  --border: rgba(255,255,255,0.12);
+  --text: #e5e7eb;
+  --muted: #a1a1aa;
+  --shadow: 0 14px 34px rgba(0,0,0,.45);
+}
+
+/* Ajustes de la navbar en oscuro */
+:root[data-theme="dark"] .qx-nav {
+  background: rgba(15, 23, 42, .7);
+  border-bottom-color: rgba(255,255,255,0.12);
+}
+:root[data-theme="dark"] .qx-menu a { color: var(--muted); }
+:root[data-theme="dark"] .qx-menu a.active, 
+:root[data-theme="dark"] .qx-menu a:hover { color: #22c55e; }
+
+/* Botones y contornos mejor integrados en oscuro */
+:root[data-theme="dark"] .qx-btn.qx-outline {
+  background: transparent;
+  color: #22c55e;
+  border-color: rgba(34,197,94,.5);
+}
+:root[data-theme="dark"] .qx-btn.qx-outline:hover {
+  background: rgba(34,197,94,.12);
+}

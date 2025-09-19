@@ -9,6 +9,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Preload del tema: fija data-theme antes de cargar CSS -->
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      t = 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', t || 'light');
+  })();
+</script>
   <!-- Styles -->
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <meta name="csrf-token" content="{{ csrf_token }}">
@@ -29,14 +39,15 @@
         <a href="{% url 'glossary' %}">Glosario</a>
       </nav>
       <div class="qx-actions">
-        {% if user.is_authenticated %}
-          <a class="qx-btn qx-outline" href="/admin/">Admin</a>
-          <a class="qx-btn" href="{% url 'logout' %}">Salir</a>
-        {% else %}
-          <a class="qx-btn qx-outline" href="{% url 'signup' %}">Regístrate</a>
-          <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
-        {% endif %}
-      </div>
+  <button class="qx-btn qx-outline" id="theme-toggle" onclick="toggleTheme()" title="Tema claro/oscuro">🌙</button>
+  {% if user.is_authenticated %}
+    <a class="qx-btn qx-outline" href="/admin/">Admin</a>
+    <a class="qx-btn" href="{% url 'logout' %}">Salir</a>
+  {% else %}
+    <a class="qx-btn qx-outline" href="{% url 'signup' %}">Regístrate</a>
+    <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
+  {% endif %}
+</div>
       <button class="qx-burger" onclick="window.qxToggleMenu()">☰</button>
     </div>
   </header>
@@ -62,6 +73,7 @@
     function getCSRFToken(){ return getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''); }
   </script>
   <script src="{% static 'js/ui.js' %}"></script>
+  <script src="{% static 'js/theme.js' %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
