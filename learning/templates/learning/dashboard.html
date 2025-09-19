@@ -1,73 +1,56 @@
 {% extends "base.html" %}
-{% load static %}
 {% load dict_extras %}
-
 {% block content %}
-  <h1>Tu Panel</h1>
+  <!-- Hero -->
+  <section style="text-align:center;margin:26px 0 18px;">
+    <h1>Panel de Control</h1>
+    <p class="lead">Continúa tu aprendizaje de guaraní con lecciones y práctica guiada.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
+      {% if next_lesson %}
+        <a class="qx-btn" href="{% url 'lesson_detail' next_lesson.id %}">Continuar: {{ next_lesson.title }}</a>
+      {% else %}
+        <a class="qx-btn" href="{% url 'lessons_overview' %}">Ver Lecciones</a>
+      {% endif %}
+      <a class="qx-btn qx-outline" href="{% url 'srs_study' %}">Estudiar (SRS)</a>
+      <a class="qx-btn qx-outline" href="{% url 'glossary' %}">Glosario</a>
+    </div>
+  </section>
 
-  <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:10px 0 16px;">
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div class="tip">Progreso total</div>
-        <div style="font-size:28px;font-weight:900;" id="overall-pct">—</div>
+  <!-- Quick stats -->
+  <section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+    <div class="card">
+      <div class="tip">Lecciones completadas</div>
+      <div style="font-size:28px;font-weight:900;">{{ lessons_completed }}</div>
+    </div>
+    <div class="card">
+      <div class="tip">Entradas en el Glosario</div>
+      <div style="font-size:28px;font-weight:900;">{{ glossary_count }}</div>
+    </div>
+    <div class="card">
+      <div class="tip">SRS hoy</div>
+      <div style="display:flex;gap:14px;align-items:center;">
+        <div><strong>{{ due_reviews }}</strong> vencidas</div>
+        <div><strong>{{ allowed_new }}</strong> nuevas</div>
       </div>
-      <div class="gauge" id="overall-gauge" style="--val:0;"><span id="overall-gauge-t">0%</span></div>
     </div>
-  </div>
-  <div class="card">
-    <div class="tip">Entradas en Glosario</div>
-    <div style="font-size:28px;font-weight:900;">{{ glossary_count }}</div>
-  </div>
-  <div class="card">
-    <div class="tip">Estudio</div>
-    <a class="btn" href="{% url 'srs_study' %}">Continuar SRS</a>
-  </div>
-</div>
-  <div class="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px;">
-    <div class="card">
-      <div style="font-size:13px;color:#666;">Entradas en tu Glosario</div>
-      <div style="font-size:28px;font-weight:700;">{{ glossary_count }}</div>
-    </div>
-    <div class="card">
-      <div style="font-size:13px;color:#666;">Lecciones publicadas</div>
-      <div style="font-size:28px;font-weight:700;">{{ lessons|length }}</div>
-    </div>
-    <div class="card">
-      <div style="font-size:13px;color:#666;">Estudio</div>
-      <a class="btn" href="{% url 'srs_study' %}">Ir a Estudiar (SRS)</a>
-    </div>
-  </div>
+  </section>
 
-  <h3>Tus Lecciones</h3>
-  <div class="lessons-grid">
-    {% for lesson in lessons %}
-      {% with lp=progress_map|get_item:lesson.id %}
-      <div class="card">
-        <h4>{{ lesson.title }}</h4>
-        <p>{{ lesson.description|default:"" }}</p>
-
-        {% if lp %}
-          <div class="progress">
-            <div class="bar" style="width: {{ lp.progress_percent|floatformat:0 }}%"></div>
-          </div>
-          <small>Progreso: {{ lp.progress_percent|floatformat:1 }}%</small><br>
-          <small>Escrito: {{ lp.written_score|floatformat:1 }}% · Pronunciación: {{ lp.pronunciation_confidence|floatformat:1 }}%</small><br>
-          {% if lp.completed %}
-            <span class="badge">Completado</span>
-          {% endif %}
-        {% else %}
-          <div class="progress"><div class="bar" style="width: 0%"></div></div>
-          <small>Progreso: 0%</small>
-        {% endif %}
-
-        <div style="margin-top:8px;">
-          <a class="btn" href="{% url 'lesson_detail' lesson.id %}">Ir a la lección</a>
+  <!-- Recent lessons (small strip) -->
+  <section style="margin:10px 0;">
+    <h3 style="margin-bottom:8px;">Lecciones recientes</h3>
+    <div class="grid grid-4">
+      {% for l in recent_lessons %}
+        {% with lp=progress_map|get_item:l.id %}
+        <div class="tile">
+          <h4 style="margin:0">{{ l.title }}</h4>
+          <small>{{ l.description|default:"" }}</small>
+          <div class="progress"><div class="bar" style="width: {{ lp.progress_percent|default:0 }}%"></div></div>
+          <a class="qx-btn qx-outline" href="{% url 'lesson_detail' l.id %}">Abrir</a>
         </div>
-      </div>
-      {% endwith %}
-    {% empty %}
-      <p>No hay lecciones aún.</p>
-    {% endfor %}
-  </div>
+        {% endwith %}
+      {% empty %}
+        <div class="card">Aún no hay lecciones recientes. <a href="{% url 'lessons_overview' %}" style="color:var(--green);font-weight:800;">Explorar lecciones</a></div>
+      {% endfor %}
+    </div>
+  </section>
 {% endblock %}

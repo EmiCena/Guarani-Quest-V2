@@ -1,17 +1,36 @@
-<!-- learning/templates/learning/partials/pronunciation.html -->
 <div class="card exercise" id="pronun-{{ ex.id }}">
   <h4>Pronuncia: <em>{{ ex.text_guarani }}</em></h4>
+
   {% if ex.reference_audio %}
-    <div><small>Referencia:</small><br><audio controls src="{{ ex.reference_audio.url }}"></audio></div>
+    <div class="mb-2">
+      <small>Referencia:</small><br>
+      <audio controls src="{{ ex.reference_audio.url }}"></audio>
+    </div>
   {% endif %}
-  <div class="pronun-controls">
-    <button class="btn" onclick="startPronunciation('{{ ex.id }}', `{{ ex.text_guarani }}`)">Grabar</button>
-    <button class="btn btn-secondary" onclick="stopPronunciation('{{ ex.id }}')">Detener</button>
+
+  <div class="mb-2" style="display:flex;gap:10px;align-items:center;">
+    <label for="lang-{{ ex.id }}"><small>Reconocimiento:</small></label>
+    <select id="lang-{{ ex.id }}">
+      <option value="es-ES">Español (España)</option>
+      <option value="es-MX">Español (México)</option>
+      <option value="es-AR">Español (Argentina)</option>
+    </select>
   </div>
-  <div class="pronun-feedback">
+
+  <div class="pronun-controls" style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn" onclick="startPronunciation('{{ ex.id }}', `{{ ex.text_guarani }}`)">Grabar</button>
+    <button class="btn-secondary" onclick="stopPronunciation('{{ ex.id }}')">Detener</button>
+  </div>
+
+  <div class="mt-2" style="font-size:13px;color:var(--muted);">
+    <strong>Transcripción:</strong>
+    <span id="live-{{ ex.id }}" class="transcript">—</span>
+  </div>
+
+  <div class="pronun-feedback mt-2">
     <div>Exactitud: <span id="acc-{{ ex.id }}">0</span>%</div>
     <div>Fluidez: <span id="flu-{{ ex.id }}">0</span>%</div>
     <div>Integridad: <span id="comp-{{ ex.id }}">0</span>%</div>
-    <div class="progress"><div class="bar" id="bar-{{ ex.id }}" style="width: 0%"></div></div>
+    <div class="progress"><div class="bar" id="bar-{{ ex.id }}" style="width:0%"></div></div>
   </div>
 </div>

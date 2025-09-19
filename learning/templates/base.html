@@ -2,114 +2,66 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Guaraní LMS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guaraní Quest</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   {% load static %}
-  <!-- New typography -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&family=Sora:wght@300..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- Styles -->
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <!-- Optional Azure Speech SDK -->
-  <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
   {% block extra_head %}{% endblock %}
 </head>
-<body>
-  <div class="layout">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <div class="brand-logo">ɢ</div>
-        <div class="brand-title">Guaraní LMS</div>
-        <button class="icon-btn ghost collapse-btn" onclick="toggleSidebar()" title="Colapsar/expandir">⋯</button>
-      </div>
-      <nav class="sidebar-nav">
-        <a href="{% url 'dashboard' %}" class="nav-item">
-          <span class="icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8z" stroke="currentColor" stroke-width="1.5"/></svg>
-          </span><span class="label">Panel</span>
-        </a>
-        <a href="{% url 'glossary' %}" class="nav-item">
-          <span class="icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 4h10a4 4 0 0 1 4 4v11H7a2 2 0 0 1-2-2V4z" stroke="currentColor" stroke-width="1.5"/><path d="M7 4v13a2 2 0 0 0 2 2h10" stroke="currentColor" stroke-width="1.5"/></svg>
-          </span><span class="label">Glosario</span>
-        </a>
-        <a href="{% url 'srs_study' %}" class="nav-item">
-          <span class="icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 7h8M8 12h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </span><span class="label">Estudiar</span>
-        </a>
-        <a href="/admin/" class="nav-item">
-          <span class="icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 7-9 7-9-7 9-7z" stroke="currentColor" stroke-width="1.5"/><path d="M12 10l9 7" stroke="currentColor" stroke-width="1.5"/></svg>
-          </span><span class="label">Admin</span>
-        </a>
-        <div id="cmdk" class="cmdk" aria-hidden="true">
-  <div class="cmdk-panel" role="dialog" aria-modal="true" aria-label="Ir a...">
-    <input id="cmdk-input" type="text" placeholder="Buscar… (dashboard, glosario, estudiar, admin)" />
-    <ul id="cmdk-list"></ul>
-  </div>
-</div>
-<div id="toasts" class="toasts"></div>
-<a href="#main" class="skip">Saltar al contenido</a>
+<body class="qx">
+  <!-- Top navbar -->
+  <header class="qx-nav">
+    <div class="qx-container qx-nav-row">
+      <a class="qx-brand" href="{% url 'dashboard' %}">
+        <span class="qx-logo">▲</span>
+        <span>Guaraní Quest</span>
+      </a>
+      <nav class="qx-menu">
+        <a href="{% url 'dashboard' %}" data-match="/">Inicio</a>
+        <a href="{% url 'lessons_overview' %}">Lecciones</a>
+        <a href="{% url 'exercises' %}">Ejercicios</a>
+        <a href="{% url 'glossary' %}">Glosario</a>
       </nav>
-      <div class="sidebar-footer">
-        <button class="btn-outline w-full" id="theme-toggle" onclick="toggleTheme()" title="Tema">
-          <span class="icon">🌙</span><span class="label">Tema</span>
-        </button>
+      <div class="qx-actions">
         {% if user.is_authenticated %}
-          <a class="btn-secondary w-full" href="{% url 'logout' %}">
-            <span class="icon">↩</span><span class="label">Salir</span>
-          </a>
+          <a class="qx-btn qx-outline" href="/admin/">Admin</a>
+          <a class="qx-btn" href="{% url 'logout' %}">Salir</a>
         {% else %}
-          <a class="btn w-full" href="{% url 'login' %}"><span class="label">Entrar</span></a>
+          <a class="qx-btn qx-outline" href="{% url 'signup' %}">Regístrate</a>
+          <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
         {% endif %}
       </div>
-    </aside>
-
-    <!-- Content -->
-    <div class="content">
-      <header class="topbar">
-        <button class="icon-btn" id="burger" onclick="toggleSidebarMobile()" aria-label="Menú">☰</button>
-        <div class="top-title">{% block page_title %}{% endblock %}</div>
-        <div class="top-actions">
-          <button class="icon-btn" onclick="toggleTheme()" title="Tema claro/oscuro" id="theme-toggle-top">🌙</button>
-        </div>
-      </header>
-
-      <main class="container">
-        {% block content %}{% endblock %}
-      </main>
+      <button class="qx-burger" onclick="window.qxToggleMenu()">☰</button>
     </div>
-  </div>
+  </header>
 
-  <!-- CSRF helper -->
+  <!-- Page content -->
+  <main class="qx-container" id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="qx-footer">
+    <div class="qx-container">
+      © {{ now|date:"Y" }} Guaraní Quest. Todos los derechos reservados.
+    </div>
+  </footer>
+
   <script>
     function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-        for (const c of document.cookie.split(';')) {
-          const cookie = c.trim();
-          if (cookie.substring(0, name.length + 1) === (name + '=')) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
-        }
-      }
-      return cookieValue;
+      let v=null; if(document.cookie && document.cookie!==''){
+        for(const c of document.cookie.split(';')){const ck=c.trim(); if(ck.startsWith(name+'=')){v=decodeURIComponent(ck.substring(name.length+1));break;}}
+      } return v;
     }
-    function getCSRFToken() {
-      return getCookie('csrftoken') ||
-             (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
-    }
+    function getCSRFToken(){ return getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''); }
   </script>
-
-  <!-- Scripts -->
-  <script src="{% static 'js/theme.js' %}"></script>
-  <script src="{% static 'js/layout.js' %}"></script>
-  <script src="{% static 'js/glossary.js' %}"></script>
-  <script src="{% static 'js/progress.js' %}"></script>
+  <script src="{% static 'js/ui.js' %}"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

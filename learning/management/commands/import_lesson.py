@@ -1,8 +1,6 @@
-# learning/management/commands/import_lesson.py
 import json
 import os
 from pathlib import Path
-from copy import deepcopy
 
 from django.core.management.base import BaseCommand, CommandError
 from django.core.files import File
@@ -16,17 +14,17 @@ from learning.models import (
 )
 
 try:
-    import yaml  # optional for .yml/.yaml
+    import yaml  # optional
     HAS_YAML = True
 except Exception:
     HAS_YAML = False
 
 
 def _auto_letter_choices(choices):
-    # Accept either [{"key":"A","text":"..."}, ...] or ["text A", "text B", ...]
+    """Normalize choices to [{'key': 'A', 'text': '...'}, ...]."""
     out = []
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i, item in enumerate(choices):
+    for i, item in enumerate(choices or []):
         if isinstance(item, dict) and "key" in item and "text" in item:
             out.append({"key": str(item["key"]).upper(), "text": str(item["text"])})
         else:
@@ -35,28 +33,30 @@ def _auto_letter_choices(choices):
 
 
 class Command(BaseCommand):
-    help = "Import a lesson from JSON or YAML. See README sample format."
+    help = "Import a lesson from JSON or YAML."
 
     def add_arguments(self, parser):
         parser.add_argument("file", type=str, help="Path to lesson.json or lesson.yaml")
         parser.add_argument("--order", type=int, default=None, help="Optional lesson order")
         parser.add_argument("--publish", action="store_true", help="Set is_published=True")
-        parser.add_argument("--media-base", type=str, default=".", help="Base folder to resolve audio file paths")
+        # IMPORTANT: use dest='media_base' (arg name with underscore)
+        parser.add_argument(
+            "--media-base", dest="media_base", type=str, default=".",
+            help="Base folder to resolve audio file paths"
+        )
 
     def handle(self, *args, **opts):
         path = Path(opts["file"]).expanduser().resolve()
         if not path.exists():
             raise CommandError(f"File not found: {path}")
 
-        # Load
+        # Load JSON/YAML
         if path.suffix.lower() in [".yml", ".yaml"]:
             if not HAS_YAML:
                 raise CommandError("PyYAML not installed. pip install pyyaml")
-            with open(path, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
         else:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = json.loads(path.read_text(encoding="utf-8"))
 
         title = (data.get("title") or "").strip()
         if not title:
@@ -71,7 +71,9 @@ class Command(BaseCommand):
         matchings = data.get("matching", []) or []
         pronun = data.get("pronunciation", []) or []
 
-        media_base = Path(opts["media-base"]).expanduser().resolve()
+        # FIX: argparse maps --media-base to 'media_base'
+        media_base_str = opts.get("media_base") or "."
+        media_base = Path(media_base_str).expanduser().resolve()
 
         with transaction.atomic():
             lesson = Lesson.objects.create(
@@ -96,6 +98,8 @@ class Command(BaseCommand):
                     if full.exists():
                         with open(full, "rb") as f:
                             sec.reference_audio.save(os.path.basename(full), File(f), save=True)
+                    else:
+                        self.stdout.write(self.style.WARNING(f"Section audio not found: {full}"))
 
             # Fill blanks
             for i, fb in enumerate(fillblanks):
@@ -117,7 +121,7 @@ class Command(BaseCommand):
                     order=int(q.get("order") or i),
                 )
 
-            # Matching (each block is a separate exercise)
+            # Matching
             for i, m in enumerate(matchings):
                 mex = MatchingExercise.objects.create(
                     lesson=lesson,
@@ -144,5 +148,7 @@ class Command(BaseCommand):
                     if full.exists():
                         with open(full, "rb") as f:
                             pe.reference_audio.save(os.path.basename(full), File(f), save=True)
+                    else:
+                        self.stdout.write(self.style.WARNING(f"Pronunciation audio not found: {full}"))
 
         self.stdout.write(self.style.SUCCESS("Lesson import completed."))

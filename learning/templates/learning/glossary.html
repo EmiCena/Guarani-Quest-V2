@@ -1,16 +1,32 @@
-<!-- learning/templates/learning/glossary.html -->
 {% extends "base.html" %}
 {% block content %}
-  <h2>Tu Glosario</h2>
-  <div class="glossary-form">
-    <input id="gloss-source" type="text" placeholder="Palabra o frase en español" />
-    <button class="btn" onclick="translateAndAdd()">Traducir y Agregar</button>
+  <section style="text-align:center;margin:26px 0 10px;">
+    <h1>Glosario Guaraní</h1>
+    <p class="lead">Explora el vocabulario, busca palabras y escucha su pronunciación.</p>
+  </section>
+
+  <div style="max-width:720px;margin:0 auto 14px;">
+    <input id="glossary-search" type="text" placeholder="Buscar palabras en guaraní o español…" oninput="qxFilterGlossary()">
   </div>
-  <ul class="glossary-list" id="glossary-list">
+
+  <div id="glossary-list" style="display:grid;gap:10px;max-width:720px;margin:0 auto;">
     {% for e in entries %}
-      <li><strong>{{ e.source_text_es }}</strong> → {{ e.translated_text_gn }} {% if e.notes %}<em>({{ e.notes }})</em>{% endif %}</li>
+      <div class="card glos-card" data-es="{{ e.source_text_es|lower }}" data-gn="{{ e.translated_text_gn|lower }}">
+        <div>
+          <div class="glos-title">{{ e.translated_text_gn }}</div>
+          <div style="color:#475569">{{ e.source_text_es }}</div>
+          {% if e.notes %}<div class="glos-note">“{{ e.notes }}”</div>{% endif %}
+        </div>
+        <button class="glos-speak" onclick="qxSpeak('{{ e.translated_text_gn|escapejs }}')">🔊</button>
+      </div>
     {% empty %}
-      <li>Aún no has agregado palabras.</li>
+      <div class="card">Aún no has agregado palabras.</div>
     {% endfor %}
-  </ul>
+  </div>
+
+  <div style="max-width:720px;margin:14px auto 0;display:flex;gap:10px;">
+    <input id="manual-es" type="text" placeholder="Español">
+    <input id="manual-gn" type="text" placeholder="Guaraní">
+    <button class="qx-btn" onclick="addManual()">Agregar</button>
+  </div>
 {% endblock %}

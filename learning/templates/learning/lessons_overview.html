@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load dict_extras %}
+{% block content %}
+  <section style="margin:22px 0;">
+    <h1>Lecciones</h1>
+    <p class="lead">Tu camino para dominar el guaraní comienza aquí.</p>
+  </section>
+
+  <section style="margin:16px 0;">
+    <h3 style="color:#16a34a">Nivel Básico</h3>
+    <div class="grid grid-3">
+      {% for l in lessons %}
+        {% if l.order < 100 %}
+          {% with lp=progress_map|get_item:l.id %}
+          <div class="tile">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="qx-logo">●</span>
+              <h4 style="margin:0">{{ l.title }}</h4>
+            </div>
+            <small>{{ l.description|default:"" }}</small>
+            <div class="progress"><div class="bar" style="width: {{ lp.progress_percent|default:0 }}%"></div></div>
+            <a class="qx-btn qx-outline" href="{% url 'lesson_detail' l.id %}">Abrir</a>
+          </div>
+          {% endwith %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section style="margin:22px 0;">
+    <h3 style="color:#16a34a">Nivel Intermedio</h3>
+    <div class="grid grid-3">
+      {% for l in lessons %}
+        {% if l.order >= 100 %}
+          {% with lp=progress_map|get_item:l.id %}
+          <div class="tile">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="qx-logo">●</span>
+              <h4 style="margin:0">{{ l.title }}</h4>
+            </div>
+            <small>{{ l.description|default:"" }}</small>
+            <div class="progress"><div class="bar" style="width: {{ lp.progress_percent|default:0 }}%"></div></div>
+            <a class="qx-btn qx-outline" href="{% url 'lesson_detail' l.id %}">Abrir</a>
+          </div>
+          {% endwith %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

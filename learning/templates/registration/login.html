@@ -1,10 +1,17 @@
-<!-- learning/templates/registration/login.html -->
 {% extends "base.html" %}
 {% block content %}
-  <h2>Entrar</h2>
-  <form method="post">{% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Entrar</button>
-  </form>
-  <p>¿No tienes cuenta? <a href="{% url 'signup' %}">Regístrate</a></p>
+  <div style="display:grid;place-items:center;min-height:60vh;">
+    <div class="card" style="max-width:420px;width:100%;text-align:center;">
+      <h2>Bienvenido a Guaraní Quest</h2>
+      <p class="lead">Aprende guaraní de forma interactiva y divertida.</p>
+      <form method="post" style="text-align:left;margin-top:10px;">{% csrf_token %}
+        {{ form.as_p }}
+        <button class="qx-btn btn-full" type="submit">Iniciar Sesión</button>
+      </form>
+      <div style="margin-top:10px;">
+        ¿No tienes una cuenta?
+        <a href="{% url 'signup' %}" style="color:var(--green);font-weight:800;">Regístrate aquí</a>
+      </div>
+    </div>
+  </div>
 {% endblock %}

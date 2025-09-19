@@ -53,11 +53,58 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
+
+        # All published lessons ordered
         lessons = Lesson.objects.filter(is_published=True).order_by("order")
-        progress_map = {lp.lesson_id: lp for lp in UserLessonProgress.objects.filter(user=user)}
-        ctx["lessons"] = lessons
-        ctx["progress_map"] = progress_map
-        ctx["glossary_count"] = GlossaryEntry.objects.filter(user=user).count()
+
+        # Progress map
+        progress_qs = UserLessonProgress.objects.filter(user=user)
+        progress_map = {lp.lesson_id: lp for lp in progress_qs}
+
+        # Stats
+        lessons_completed = sum(1 for lp in progress_map.values() if lp.completed)
+        glossary_count = GlossaryEntry.objects.filter(user=user).count()
+
+        # Next lesson: first not completed (by order), or first lesson as fallback
+        not_completed_ids = [lid for lid, lp in progress_map.items() if not lp.completed]
+        next_lesson = (lessons.filter(id__in=not_completed_ids).first() or lessons.first())
+
+        # Recent lessons by last update (fallback to first 3 by order)
+        recent_lessons = (
+            Lesson.objects.filter(progress__user=user)
+            .order_by("-progress__updated_at")
+            .distinct()[:4]
+        )
+        if not recent_lessons:
+            recent_lessons = lessons[:4]
+
+        # SRS counters (due today and new allowed)
+        due_reviews = 0
+        allowed_new = 0
+        try:
+            deck, _ = SRSDeck.objects.get_or_create(user=user, name="Mi Glosario")
+            state, _ = SRSUserState.objects.get_or_create(user=user, deck=deck)
+            today = timezone.now().date()
+            new_shown = state.new_shown_count if state.new_shown_on == today else 0
+            default_limit = {"beginner": 10, "comfortable": 15, "aggressive": 25}.get(state.mode or "comfortable", 15)
+            limit = state.new_limit or default_limit
+            allowed_new = max(0, limit - new_shown)
+            due_reviews = Flashcard.objects.filter(
+                user=user, deck=deck, suspended=False, repetitions__gt=0, due_at__lte=timezone.now()
+            ).count()
+        except Exception:
+            pass
+
+        ctx.update({
+            "lessons": lessons,              # still handy for small strip
+            "progress_map": progress_map,
+            "lessons_completed": lessons_completed,
+            "glossary_count": glossary_count,
+            "next_lesson": next_lesson,
+            "recent_lessons": recent_lessons,
+            "due_reviews": due_reviews,
+            "allowed_new": allowed_new,
+        })
         return ctx
 
 
@@ -453,3 +500,14 @@ def api_glossary_bulk_add(request):
     _sync_cards_from_glossary(request.user, deck)
 
     return Response({"created": created}, status=201)
+
+@login_required
+def exercises_view(request):
+  return render(request, "learning/exercises.html")
+
+@login_required
+def lessons_overview(request):
+  # show all lessons grouped by order (basic/intermediate)
+  lessons = Lesson.objects.filter(is_published=True).order_by("order")
+  progress_map = {lp.lesson_id: lp for lp in UserLessonProgress.objects.filter(user=request.user)}
+  return render(request, "learning/lessons_overview.html", {"lessons": lessons, "progress_map": progress_map})

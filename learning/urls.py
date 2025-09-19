@@ -27,4 +27,7 @@ urlpatterns = [
     # SRS state/mode
 path("api/srs/state/", views.api_srs_state, name="api_srs_state"),
 path("api/srs/set-mode/", views.api_srs_set_mode, name="api_srs_set_mode"),
+
+    path("exercises/", views.exercises_view, name="exercises"),
+    path("lessons/", views.lessons_overview, name="lessons_overview"),
 ]

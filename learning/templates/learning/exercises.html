@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+  <section style="text-align:center;margin:26px 0 10px;">
+    <h1>Ejercicios Interactivos</h1>
+    <p class="lead">Practica y refuerza tus conocimientos de guaraní con una variedad de actividades divertidas.</p>
+  </section>
+
+  <section class="grid grid-2">
+    <div class="tile">
+      <h4>Arrastrar y Soltar</h4>
+      <small>Conecta palabras y frases para formar oraciones.</small>
+    </div>
+    <div class="tile">
+      <h4>Completar Espacios</h4>
+      <small>Rellena los espacios en blanco con las palabras correctas.</small>
+    </div>
+    <div class="tile">
+      <h4>Escucha y Responde</h4>
+      <small>Escucha frases y selecciona la respuesta correcta.</small>
+    </div>
+    <div class="tile">
+      <h4>Traducción</h4>
+      <small>Traduce frases del español al guaraní y viceversa.</small>
+    </div>
+    <div class="tile tile-cta">
+      <h4>Pronunciación</h4>
+      <small>Practica la pronunciación de palabras y frases en guaraní.</small>
+    </div>
+  </section>
+
+  <div style="max-width:360px;margin:24px auto;">
+    <a class="qx-btn btn-full" href="{% url 'dashboard' %}">Comenzar Ejercicios</a>
+  </div>
+{% endblock %}
