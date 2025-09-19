@@ -4,7 +4,7 @@ from .models import (
     Lesson, LessonSection,
     FillBlankExercise, MultipleChoiceExercise, MatchingExercise, MatchingPair,
     PronunciationExercise, WordPhrase, GlossaryEntry,
-    UserExerciseResult, PronunciationAttempt, UserLessonProgress
+    UserExerciseResult, PronunciationAttempt, UserLessonProgress, DragDropExercise, ListeningExercise, TranslationExercise
 )
 
 class LessonSectionInline(admin.TabularInline):
@@ -78,3 +78,31 @@ class PronunciationAttemptAdmin(admin.ModelAdmin):
 class UserLessonProgressAdmin(admin.ModelAdmin):
     list_display = ("user", "lesson", "written_score", "pronunciation_confidence", "progress_percent", "completed", "updated_at")
     list_filter = ("user", "lesson", "completed")
+
+class DragDropInline(admin.TabularInline):
+    model = DragDropExercise
+    extra = 0
+
+class ListeningInline(admin.TabularInline):
+    model = ListeningExercise
+    extra = 0
+
+class TranslationInline(admin.TabularInline):
+    model = TranslationExercise
+    extra = 0
+
+@admin.register(DragDropExercise)
+class DragDropAdmin(admin.ModelAdmin):
+    list_display = ("id","lesson","order")
+
+@admin.register(ListeningExercise)
+class ListeningAdmin(admin.ModelAdmin):
+    list_display = ("id","lesson","order","correct_key")
+
+@admin.register(TranslationExercise)
+class TranslationAdmin(admin.ModelAdmin):
+    list_display = ("id","lesson","direction","order")
+
+# Opcional: mostrar en la página de la lección
+# @admin.register(Lesson) ... dentro de LessonAdmin agrega:
+# inlines = [LessonSectionInline, FillBlankInline, MCQInline, MatchingInline, PronunInline, DragDropInline, ListeningInline, TranslationInline]

@@ -1,0 +1,7 @@
+<div class="card exercise" id="trans-{{ ex.id }}">
+    <h4>Traducción ({{ ex.get_direction_display }})</h4>
+    <p style="margin:6px 0;font-weight:700">{{ ex.prompt_text }}</p>
+    <input type="text" id="ans-{{ ex.id }}" placeholder="Escribe tu respuesta…">
+    <button class="qx-btn" style="margin-top:8px" onclick="submitTranslation({{ ex.id }})">Enviar</button>
+    <div class="feedback"></div>
+  </div>

@@ -52,3 +52,15 @@ class SRSGradeSerializer(serializers.Serializer):
 
 class BulkGlossaryListSerializer(serializers.Serializer):
     items = serializers.ListField(child=GlossaryEntrySerializer())
+
+class DragDropSubmissionSerializer(serializers.Serializer):
+    exercise_id = serializers.IntegerField()
+    order = serializers.ListField(child=serializers.CharField())
+
+class ListeningSubmissionSerializer(serializers.Serializer):
+    exercise_id = serializers.IntegerField()
+    selected_key = serializers.CharField()
+
+class TranslationSubmissionSerializer(serializers.Serializer):
+    exercise_id = serializers.IntegerField()
+    answer = serializers.CharField()

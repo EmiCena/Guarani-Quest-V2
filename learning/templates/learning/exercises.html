@@ -1,34 +1,82 @@
 {% extends "base.html" %}
 {% block content %}
-  <section style="text-align:center;margin:26px 0 10px;">
+
+  <section style="text-align:center;margin:26px 0 18px;">
     <h1>Ejercicios Interactivos</h1>
-    <p class="lead">Practica y refuerza tus conocimientos de guaraní con una variedad de actividades divertidas.</p>
+    <p class="lead">Practica y refuerza tus conocimientos de guaraní con una variedad de actividades. ¡Elige una y comienza!</p>
   </section>
 
-  <section class="grid grid-2">
-    <div class="tile">
-      <h4>Arrastrar y Soltar</h4>
-      <small>Conecta palabras y frases para formar oraciones.</small>
+  <!-- Bento Grid -->
+  <section class="bento-grid">
+    <!-- Arrastrar y Soltar -->
+    <div class="bento-card col-span-6">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="bento-icon">↔</div>
+        <div>
+          <h3 class="bento-title">Arrastrar y Soltar</h3>
+          <p class="bento-desc">Conecta palabras y frases para formar oraciones correctas.</p>
+        </div>
+      </div>
+      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
     </div>
-    <div class="tile">
-      <h4>Completar Espacios</h4>
-      <small>Rellena los espacios en blanco con las palabras correctas.</small>
+
+    <!-- Completar Espacios -->
+    <div class="bento-card col-span-6">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="bento-icon">▢</div>
+        <div>
+          <h3 class="bento-title">Completar Espacios</h3>
+          <p class="bento-desc">Rellena los espacios en blanco con las palabras correctas.</p>
+        </div>
+      </div>
+      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
     </div>
-    <div class="tile">
-      <h4>Escucha y Responde</h4>
-      <small>Escucha frases y selecciona la respuesta correcta.</small>
+
+    <!-- Escucha y Responde -->
+    <div class="bento-card col-span-6">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="bento-icon">🔊</div>
+        <div>
+          <h3 class="bento-title">Escucha y Responde</h3>
+          <p class="bento-desc">Escucha una frase y selecciona la respuesta correcta.</p>
+        </div>
+      </div>
+      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
     </div>
-    <div class="tile">
-      <h4>Traducción</h4>
-      <small>Traduce frases del español al guaraní y viceversa.</small>
+
+    <!-- Traducción -->
+    <div class="bento-card col-span-6">
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="bento-icon">⇄</div>
+        <div>
+          <h3 class="bento-title">Traducción</h3>
+          <p class="bento-desc">Traduce frases del español al guaraní y viceversa.</p>
+        </div>
+      </div>
+      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
     </div>
-    <div class="tile tile-cta">
-      <h4>Pronunciación</h4>
-      <small>Practica la pronunciación de palabras y frases en guaraní.</small>
+
+    <!-- Pronunciación: tile protagonista, ocupa ancho completo en desktop -->
+    <div class="bento-card bento-accent col-span-12 row-span-2">
+      <div style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div class="bento-icon">🎤</div>
+          <div>
+            <h3 class="bento-title">Pronunciación</h3>
+            <p class="bento-desc">Practica la pronunciación de palabras y frases en guaraní con tu micrófono.</p>
+          </div>
+        </div>
+        <a class="qx-btn" href="{% url 'lessons_overview' %}">Empezar</a>
+      </div>
+      <div style="margin-top:10px;border-radius:12px;height:120px;background:
+          linear-gradient(90deg, rgba(134,239,172,.35), rgba(34,197,94,.15)),
+          repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0 2px, transparent 2px 22px);
+          border:1px solid #bbf7d0;"></div>
     </div>
   </section>
 
   <div style="max-width:360px;margin:24px auto;">
-    <a class="qx-btn btn-full" href="{% url 'dashboard' %}">Comenzar Ejercicios</a>
+    <a class="qx-btn btn-full" href="{% url 'lessons_overview' %}">Comenzar Ejercicios</a>
   </div>
+
 {% endblock %}

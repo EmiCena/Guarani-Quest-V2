@@ -26,12 +26,38 @@
     {% include "learning/partials/exercise_matching.html" with ex=ex %}
   {% endfor %}
 
+  <h3>Arrastrar y Soltar</h3>
+{% for ex in dragdrops %}
+  {% include "learning/partials/exercise_dragdrop.html" with ex=ex %}
+{% empty %}
+  <div class="card">No hay ejercicios de arrastrar/soltar.</div>
+{% endfor %}
+
+<h3>Escucha y Responde</h3>
+{% for ex in listenings %}
+  {% include "learning/partials/exercise_listening.html" with ex=ex %}
+{% empty %}
+  <div class="card">No hay ejercicios de escucha.</div>
+{% endfor %}
+
+<h3>Traducción</h3>
+{% for ex in translations %}
+  {% include "learning/partials/exercise_translation.html" with ex=ex %}
+{% empty %}
+  <div class="card">No hay ejercicios de traducción.</div>
+{% endfor %}
+
+{% load static %}
+<script src="{% static 'js/exercises.js' %}"></script>
+
   <h3>Práctica Oral</h3>
   {% for ex in pronun_exercises %}
     {% include "learning/partials/pronunciation.html" with ex=ex %}
   {% empty %}
     <p>No hay ejercicios de pronunciación en esta lección.</p>
   {% endfor %}
+
+
 
   <script src="{% static 'js/pronunciation.js' %}"></script>
 {% endblock %}

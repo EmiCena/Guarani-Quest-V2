@@ -1,32 +1,66 @@
 {% extends "base.html" %}
+{% load static %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/flashcards.css' %}">
+{% endblock %}
+
 {% block content %}
   <section style="text-align:center;margin:26px 0 10px;">
     <h1>Glosario Guaraní</h1>
-    <p class="lead">Explora el vocabulario, busca palabras y escucha su pronunciación.</p>
+    <p class="lead">Explora, escucha y graba pronunciaciones reales. Haz click en una tarjeta para voltear.</p>
   </section>
 
-  <div style="max-width:720px;margin:0 auto 14px;">
+  <div style="max-width:760px;margin:0 auto 14px;">
     <input id="glossary-search" type="text" placeholder="Buscar palabras en guaraní o español…" oninput="qxFilterGlossary()">
   </div>
 
-  <div id="glossary-list" style="display:grid;gap:10px;max-width:720px;margin:0 auto;">
+  <div id="flash-grid" class="flash-grid">
     {% for e in entries %}
-      <div class="card glos-card" data-es="{{ e.source_text_es|lower }}" data-gn="{{ e.translated_text_gn|lower }}">
-        <div>
-          <div class="glos-title">{{ e.translated_text_gn }}</div>
-          <div style="color:#475569">{{ e.source_text_es }}</div>
-          {% if e.notes %}<div class="glos-note">“{{ e.notes }}”</div>{% endif %}
+      <div class="flash" tabindex="0" data-es="{{ e.source_text_es|lower }}" data-gn="{{ e.translated_text_gn|lower }}">
+        <div class="flash-inner">
+          <!-- Frente (Guaraní) -->
+          <div class="face face-front">
+            <div class="tag">Guaraní</div>
+            <h3 class="word">{{ e.translated_text_gn }}</h3>
+            <div class="actions">
+              {% if e.audio_pronunciation %}
+                <audio id="audio-{{ e.id }}" src="{{ e.audio_pronunciation.url }}"></audio>
+                <button class="qx-btn qx-outline btn-sm" onclick="document.getElementById('audio-{{ e.id }}').play()">🔊 Reproducir</button>
+              {% else %}
+                <button class="qx-btn qx-outline btn-sm" onclick="qxSpeak('{{ e.translated_text_gn|escapejs }}')">🔊 TTS</button>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Reverso (Español + grabación) -->
+          <div class="face face-back">
+            <div class="tag">Español</div>
+            <h3 class="word">{{ e.source_text_es }}</h3>
+            {% if e.notes %}<div class="sub">“{{ e.notes }}”</div>{% endif %}
+
+            <div class="rec-controls" id="rec-{{ e.id }}">
+              <button class="qx-btn btn-sm" onclick="startRec({{ e.id }})">● Grabar</button>
+              <button class="qx-btn qx-outline btn-sm" onclick="stopRec({{ e.id }})">■ Detener</button>
+              <button class="qx-btn qx-outline btn-sm" onclick="saveRec({{ e.id }})">⬆ Guardar</button>
+              <span class="hint" id="hint-{{ e.id }}"></span>
+            </div>
+            <audio id="prev-{{ e.id }}" controls style="display:none;margin-top:8px;"></audio>
+          </div>
         </div>
-        <button class="glos-speak" onclick="qxSpeak('{{ e.translated_text_gn|escapejs }}')">🔊</button>
       </div>
     {% empty %}
-      <div class="card">Aún no has agregado palabras.</div>
+      <div class="card">Aún no has agregado palabras. Usa los campos de abajo.</div>
     {% endfor %}
   </div>
 
-  <div style="max-width:720px;margin:14px auto 0;display:flex;gap:10px;">
+  <div style="max-width:760px;margin:14px auto 0;display:flex;gap:10px;flex-wrap:wrap;">
     <input id="manual-es" type="text" placeholder="Español">
     <input id="manual-gn" type="text" placeholder="Guaraní">
     <button class="qx-btn" onclick="addManual()">Agregar</button>
   </div>
+
+  {% block extra_js %}
+    <script src="{% static 'js/glossary.js' %}"></script>
+    <script src="{% static 'js/flashcards.js' %}"></script>
+  {% endblock %}
 {% endblock %}

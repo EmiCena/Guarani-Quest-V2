@@ -268,3 +268,63 @@ class SRSUserState(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.deck} — θ={self.theta:.2f} — mode={self.mode}"
+    
+# --- Nuevos ejercicios ---
+
+class DragDropExercise(models.Model):
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="dragdrops")
+    prompt_text = models.CharField(max_length=255, help_text="Ej: Ordena la oración.")
+    correct_tokens = models.JSONField(help_text="Lista de tokens en orden correcto, p.ej. ['Che','héra','María']")
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"DragDrop #{self.id} - L{self.lesson_id}"
+
+class ListeningExercise(models.Model):
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="listenings")
+    prompt_text = models.CharField(max_length=255, blank=True, default="")
+    audio = models.FileField(upload_to="listening/", help_text="Audio estímulo (mp3/wav)")
+    choices_json = models.JSONField(help_text='[{"key":"A","text":"..."}, ...]')
+    correct_key = models.CharField(max_length=5)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"Listening #{self.id} - L{self.lesson_id}"
+
+class TranslationExercise(models.Model):
+    DIRECTION = (
+        ("es_gn", "Español → Guaraní"),
+        ("gn_es", "Guaraní → Español"),
+    )
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="translations")
+    prompt_text = models.CharField(max_length=255)
+    direction = models.CharField(max_length=10, choices=DIRECTION, default="es_gn")
+    acceptable_answers = models.JSONField(default=list, help_text='Lista de respuestas válidas/sinónimos')
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"Translation #{self.id} - L{self.lesson_id}"
+
+# learning/models.py (solo la clase; el resto de tu archivo no cambia)
+class GlossaryEntry(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="glossary_entries")
+    source_text_es = models.CharField(max_length=255)
+    translated_text_gn = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
+    audio_pronunciation = models.FileField(upload_to="glossary_audio/", blank=True, null=True)  # nuevo
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} - {self.source_text_es} → {self.translated_text_gn}"

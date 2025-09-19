@@ -1,0 +1,42 @@
+<div class="card exercise" id="drag-{{ ex.id }}">
+    <h4>Arrastrar y Soltar</h4>
+    <small>{{ ex.prompt_text }}</small>
+  
+    <div class="dd-bank" id="bank-{{ ex.id }}" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+    <div class="dd-drop" id="drop-{{ ex.id }}" style="min-height:46px;border:1px dashed #cbd5e1;border-radius:10px;padding:8px;margin-top:8px;background:#f8fafc"></div>
+  
+    <button class="qx-btn" style="margin-top:10px" onclick="submitDragDrop({{ ex.id }})">Enviar</button>
+    <div class="feedback"></div>
+  
+    <script>
+      // inicializa con las fichas barajadas
+      (function(){
+        const tokens = {{ ex.correct_tokens|safe }};
+        const shuffled = tokens.slice().sort(()=>Math.random()-0.5);
+        const bank = document.getElementById("bank-{{ ex.id }}");
+        const drop = document.getElementById("drop-{{ ex.id }}");
+        function makeChip(t){
+          const el=document.createElement("span");
+          el.textContent=t; el.className="chip";
+          el.draggable=true;
+          el.style.cssText="padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;cursor:grab;";
+          el.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",t); e.dataTransfer.setData("chip-id", Date.now()+Math.random()); el.classList.add('dragging');});
+          el.addEventListener("dragend",()=>el.classList.remove('dragging'));
+          return el;
+        }
+        [bank, drop].forEach(zone=>{
+          zone.addEventListener("dragover", e=>{e.preventDefault(); zone.style.background="#eef2f7";});
+          zone.addEventListener("dragleave", ()=>{zone.style.background= zone.id.startsWith("drop-") ? "#f8fafc" : "";});
+          zone.addEventListener("drop", e=>{
+            e.preventDefault();
+            const t=e.dataTransfer.getData("text/plain");
+            if(!t) return;
+            const el=makeChip(t);
+            zone.appendChild(el);
+            zone.style.background= zone.id.startsWith("drop-") ? "#f8fafc" : "";
+          });
+        });
+        shuffled.forEach(t=> bank.appendChild(makeChip(t)));
+      })();
+    </script>
+  </div>

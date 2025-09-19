@@ -10,7 +10,11 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
-
+from .models import DragDropExercise, ListeningExercise, TranslationExercise
+from .serializers import DragDropSubmissionSerializer, ListeningSubmissionSerializer, TranslationSubmissionSerializer
+from django.views.decorators.http import require_http_methods
+from django.core.files.base import ContentFile
+import time
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -511,3 +515,69 @@ def lessons_overview(request):
   lessons = Lesson.objects.filter(is_published=True).order_by("order")
   progress_map = {lp.lesson_id: lp for lp in UserLessonProgress.objects.filter(user=request.user)}
   return render(request, "learning/lessons_overview.html", {"lessons": lessons, "progress_map": progress_map})
+
+@login_required
+@api_view(["POST"])
+def api_submit_dragdrop(request):
+    s = DragDropSubmissionSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    ex = get_object_or_404(DragDropExercise, pk=s.validated_data["exercise_id"])
+    submitted = [t.strip() for t in s.validated_data["order"]]
+    correct = [t.strip() for t in (ex.correct_tokens or [])]
+    total = max(1, len(correct))
+    correct_pos = sum(1 for i in range(min(len(submitted), len(correct))) if submitted[i].lower() == correct[i].lower())
+    score = (correct_pos / total) * 100.0
+    is_correct = score >= 95.0
+    _save_user_result(request.user, ex, score, is_correct)
+    _update_lesson_progress(request.user, ex.lesson)
+    return Response({"score": score, "correct_positions": correct_pos, "total": total}, status=200)
+
+@login_required
+@api_view(["POST"])
+def api_submit_listening(request):
+    s = ListeningSubmissionSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    ex = get_object_or_404(ListeningExercise, pk=s.validated_data["exercise_id"])
+    selected = s.validated_data["selected_key"].strip().upper()
+    is_correct = (selected == ex.correct_key.strip().upper())
+    score = 100.0 if is_correct else 0.0
+    _save_user_result(request.user, ex, score, is_correct)
+    _update_lesson_progress(request.user, ex.lesson)
+    return Response({"score": score, "is_correct": is_correct}, status=200)
+
+@login_required
+@api_view(["POST"])
+def api_submit_translation(request):
+    s = TranslationSubmissionSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    ex = get_object_or_404(TranslationExercise, pk=s.validated_data["exercise_id"])
+    from .services.scoring import levenshtein_ratio
+    answer = s.validated_data["answer"].strip().lower()
+    answers = [a.strip().lower() for a in (ex.acceptable_answers or [])]
+    exact = any(answer == a for a in answers)
+    if exact:
+        score = 100.0; is_correct = True
+    else:
+        best = max((levenshtein_ratio(answer, a) for a in answers), default=0.0)
+        score = best; is_correct = best >= 90.0
+    _save_user_result(request.user, ex, score, is_correct)
+    _update_lesson_progress(request.user, ex.lesson)
+    return Response({"score": score, "is_correct": is_correct}, status=200)
+
+@login_required
+@require_http_methods(["POST"])
+def api_glossary_upload_audio(request, pk):
+    entry = get_object_or_404(GlossaryEntry, pk=pk, user=request.user)
+    f = request.FILES.get("audio")
+    if not f:
+        return Response({"detail": "No se envió archivo 'audio'."}, status=400)
+
+    ct = (getattr(f, "content_type", "") or "").lower()
+    ext = ".webm"
+    if "wav" in ct: ext = ".wav"
+    elif "ogg" in ct: ext = ".ogg"
+    elif "mpeg" in ct or "mp3" in ct: ext = ".mp3"
+
+    filename = f"gloss_{entry.id}_{int(time.time())}{ext}"
+    entry.audio_pronunciation.save(filename, f, save=True)
+    return Response({"url": entry.audio_pronunciation.url}, status=200)

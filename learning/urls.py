@@ -30,4 +30,10 @@ path("api/srs/set-mode/", views.api_srs_set_mode, name="api_srs_set_mode"),
 
     path("exercises/", views.exercises_view, name="exercises"),
     path("lessons/", views.lessons_overview, name="lessons_overview"),
+    
+    path("api/exercises/dragdrop/", views.api_submit_dragdrop, name="api_submit_dragdrop"),
+path("api/exercises/listening/", views.api_submit_listening, name="api_submit_listening"),
+path("api/exercises/translation/", views.api_submit_translation, name="api_submit_translation"),
+
+path("api/glossary/<int:pk>/upload-audio/", views.api_glossary_upload_audio, name="api_glossary_upload_audio"),
 ]
