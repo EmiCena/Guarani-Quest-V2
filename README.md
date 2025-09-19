@@ -1,96 +1,80 @@
-# README.md
-# Guaraní Learning Platform (Django)
+# Guaraní LMS (Django)
 
-## Features
-- Auth: login/logout, registration
-- Admin CRUDL: Lessons, lesson content, exercises, words/phrases
-- Oral practice with real-time pronunciation analysis (Azure Speech SDK in-browser)
-- Written exercises: fill-in-the-blanks, MCQ, matching
-- Progress tracking: per-lesson progress with confidence bars
-- Glossary: personal word bank with Google Translate (es → gn)
+Learn Guaraní with lessons, exercises, speaking practice, a personal glossary, and an AI‑powered spaced‑repetition (SRS) review system. Designed to run fully offline by default.
 
-## Tech stack
-- Backend: Django 4.2, Django ORM, DRF for JSON endpoints
-- Frontend: HTML + CSS + vanilla JS
-- Pronunciation: Azure Cognitive Services Speech (Pronunciation Assessment)
-- Translation: Google Cloud Translate API (v2)
-- DB: SQLite by default
+## Highlights
+- Auth + Admin
+  - Login/logout, Django Admin with CRUDL for lessons and content.
+- Lessons
+  - Sections with text/audio, written exercises: Fill‑in‑the‑blank, Multiple‑choice, Matching.
+- Speaking practice
+  - Works out of the box with the browser’s mic (Web Speech API fallback).
+  - Optional Azure Speech token endpoint if you add keys later.
+- Personal Glossary
+  - Manual add (ES → GN). No keys needed.
+  - Optional translator integration (keep disabled if your network blocks API calls).
+- AI Feature (local, no cloud)
+  - Adaptive Spaced Repetition (SRS) with an online learning scheduler:
+    - Learner ability (θ) and per‑card difficulty learned from your 0–5 ratings.
+    - Memory half‑life updated per review; next interval scheduled to hit ~85% recall.
+- Zero required external services
+  - Everything runs locally. Optional integrations are documented below.
 
-## Prerequisites
-- Python 3.10+
-- Azure Speech resource (region + key)
-- Google Cloud project and service account with Translate API enabled
+## Tech
+- Django 4.2, DRF for JSON endpoints
+- HTML/CSS/vanilla JS
+- SQLite (dev)
+- Optional: Azure Speech (Pronunciation token), Remote translation APIs (disabled by default)
 
-## Quick start
-1) Clone and install dependencies
-   - python -m venv .venv
-   - source .venv/bin/activate  (Windows: .venv\Scripts\activate)
-   - pip install -r requirements.txt
+## Quick Start (local)
+1) Create venv and install deps
+   - Windows PowerShell
+     - py -3 -m venv .venv
+     - .\.venv\Scripts\Activate.ps1
+     - python -m pip install --upgrade pip
+     - pip install -r requirements.txt
+   - macOS/Linux
+     - python3 -m venv .venv
+     - source .venv/bin/activate
+     - python -m pip install --upgrade pip
+     - pip install -r requirements.txt
 
-2) Configure environment
+2) Environment
    - cp .env.example .env
-   - Fill AZURE_SPEECH_REGION and AZURE_SPEECH_KEY
-   - Set GOOGLE_APPLICATION_CREDENTIALS to the absolute path of your service account JSON
-   - For dev, leave DEBUG=True
+   - Set DJANGO_SECRET_KEY to any random string
+   - Leave external API vars empty unless you plan to use them.
 
-3) Migrate and create superuser
+3) Migrate + superuser
+   - python manage.py makemigrations learning
    - python manage.py migrate
    - python manage.py createsuperuser
 
 4) Run
    - python manage.py runserver
-   - Visit http://127.0.0.1:8000/
-   - Admin at /admin/
+   - http://127.0.0.1:8000/
 
-## User flows
-- Register at /learning/signup/ or via default auth (/accounts/login/)
-- Dashboard at /learning/dashboard/ shows progress per lesson
-- Lessons at /learning/lessons/<id>/ include written and oral exercises
-- Glossary at /learning/glossary/ for AI translation and personal notes
+## Using the App
+- Add content: /admin/
+  - Create Lessons, Sections, Exercises
+  - Add Glossary entries (or via UI)
+- Learner flow
+  - Register/Login
+  - Dashboard → pick a lesson
+  - Written exercises: instant scoring
+  - Speaking practice: click “Grabar” (browser mic). If you later add Azure keys, the app will use them automatically.
+- Glossary
+  - /learning/glossary/ → use “Agregar manual”
+  - Optional: “Traducir y Agregar” requires a translator backend; by default it’s safe‑disabled.
+- AI SRS (offline)
+  - /learning/srs/study/
+  - Show answer → rate 0–5
+  - The scheduler updates per‑card difficulty, your ability, and next interval.
 
-## Admin
-- Use Django Admin for full CRUDL on:
-  - Lessons, LessonSection, FillBlankExercise, MultipleChoiceExercise, MatchingExercise (+ MatchingPair)
-  - PronunciationExercise (upload reference audio)
-  - WordPhrase (dictionary seed content)
-
-## Pronunciation (real-time)
-- Frontend uses Azure Speech JavaScript SDK to stream mic audio to Azure for scoring
-- Backend issues short-lived token via /learning/api/azure/token/
-- Results (accuracy, fluency, completeness) update UI and are saved via /learning/api/pronunciation/attempt/
-
-## Translation
-- Backend endpoint /learning/api/translate-and-add/ calls Google Translate (es → gn)
-- Stores result in user’s Glossary with ability to add notes via /learning/api/glossary/add/
-
-## Security
-- Keep secrets in .env; do not expose keys in frontend
-- HTTPS recommended for mic access and tokens
-
-## API endpoints
-- POST /learning/api/translate-and-add/ { source_text_es }
-- POST /learning/api/glossary/add/ { source_text_es, translated_text_gn, notes? }
-- POST /learning/api/exercises/fillblank/ { exercise_id, answer }
-- POST /learning/api/exercises/mcq/ { exercise_id, selected_key }
-- POST /learning/api/exercises/matching/ { exercise_id, pairs: [{left, right}, ...] }
-- POST /learning/api/pronunciation/attempt/ { exercise_id, expected_text, accuracy_score, fluency_score, completeness_score, prosody_score? }
-- GET /learning/api/azure/token/ { token, region }
-
-## Database schema (key tables)
-- Lesson(id, title, description, order, is_published)
-- LessonSection(id, lesson_id, title, body, reference_audio, order)
-- FillBlankExercise(id, lesson_id, prompt_text, correct_answer, order)
-- MultipleChoiceExercise(id, lesson_id, question_text, choices_json, correct_key, order)
-- MatchingExercise(id, lesson_id, instructions, order)
-- MatchingPair(id, exercise_id, left_text, right_text)
-- PronunciationExercise(id, lesson_id, text_guarani, reference_audio, order)
-- WordPhrase(id, word_guarani, translation_es, audio_pronunciation, notes)
-- GlossaryEntry(id, user_id, source_text_es, translated_text_gn, notes, created_at)
-- UserExerciseResult(user_id, content_type, object_id, score, is_correct, attempts, last_submitted)
-- PronunciationAttempt(user_id, exercise_id, expected_text, accuracy_score, fluency_score, completeness_score, prosody_score, audio_file?, created_at)
-- UserLessonProgress(user_id, lesson_id, written_score, pronunciation_confidence, progress_percent, completed, updated_at)
-
-## Deployment notes
-- Set DEBUG=False, configure ALLOWED_HOSTS
-- Use WhiteNoise or a CDN for static files
-- Use HTTPS
+## Multiple-choice data format
+In Admin, enter choices_json as:
+```json
+[
+  {"key":"A","text":"Opción A"},
+  {"key":"B","text":"Opción B"},
+  {"key":"C","text":"Opción C"}
+]

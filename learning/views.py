@@ -1,11 +1,16 @@
 # learning/views.py
+from datetime import timedelta
+
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth import login
-from django.shortcuts import get_object_or_404, render, redirect
-from django.views.generic import TemplateView
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Q
+from django.shortcuts import get_object_or_404, render, redirect
+from django.utils import timezone
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.generic import TemplateView
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -14,15 +19,21 @@ from .models import (
     Lesson, LessonSection,
     FillBlankExercise, MultipleChoiceExercise, MatchingExercise, MatchingPair,
     PronunciationExercise, GlossaryEntry, WordPhrase,
-    UserExerciseResult, PronunciationAttempt, UserLessonProgress
+    UserExerciseResult, PronunciationAttempt, UserLessonProgress,
+    SRSDeck, Flashcard, ReviewLog, SRSUserState,
 )
 from .serializers import (
     FillBlankSubmissionSerializer, MCQSubmissionSerializer, MatchingSubmissionSerializer,
-    PronunciationAttemptSerializer, TranslationRequestSerializer, GlossaryEntrySerializer
+    PronunciationAttemptSerializer, TranslationRequestSerializer, GlossaryEntrySerializer,
+    SRSGradeSerializer, BulkGlossaryListSerializer,
 )
 from .services.translation import translate_es_to_gn
 from .services.azure_speech import issue_azure_speech_token
 from .services.scoring import levenshtein_ratio
+from .services.ai_srs import grade_and_schedule
+
+
+# ------------- Auth / Basic pages ------------- #
 
 def signup(request):
     if request.method == "POST":
@@ -34,6 +45,7 @@ def signup(request):
     else:
         form = SignUpForm()
     return render(request, "registration/signup.html", {"form": form})
+
 
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "learning/dashboard.html"
@@ -48,6 +60,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx["glossary_count"] = GlossaryEntry.objects.filter(user=user).count()
         return ctx
 
+
 @login_required
 def lesson_detail(request, pk):
     lesson = get_object_or_404(Lesson, pk=pk, is_published=True)
@@ -61,35 +74,53 @@ def lesson_detail(request, pk):
     }
     return render(request, "learning/lesson_detail.html", ctx)
 
+
 @login_required
 def glossary_view(request):
     entries = GlossaryEntry.objects.filter(user=request.user).order_by("-created_at")
     return render(request, "learning/glossary.html", {"entries": entries})
+
+
+# ------------- Glossary APIs (safe) ------------- #
 
 @login_required
 @api_view(["POST"])
 def api_translate_and_add(request):
     serializer = TranslationRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    text_es = serializer.validated_data["source_text_es"]
-    translated = translate_es_to_gn(text_es)
+    text_es = serializer.validated_data["source_text_es"].strip()
+
+    translated = ""
+    try:
+        translated = translate_es_to_gn(text_es).strip()
+    except Exception:
+        translated = ""
+
+    fallback = (not translated) or (translated.lower() == text_es.lower())
+    if fallback:
+        return Response({"fallback": True, "suggestion": text_es}, status=200)
+
     entry = GlossaryEntry.objects.create(
         user=request.user, source_text_es=text_es, translated_text_gn=translated
     )
-    return Response({"id": entry.id, "translated_text_gn": translated}, status=200)
+    return Response({"id": entry.id, "translated_text_gn": translated, "fallback": False}, status=200)
+
 
 @login_required
 @api_view(["POST"])
 def api_add_glossary_entry(request):
-    serializer = GlossaryEntrySerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+    s = GlossaryEntrySerializer(data=request.data)
+    s.is_valid(raise_exception=True)
     entry = GlossaryEntry.objects.create(
         user=request.user,
-        source_text_es=serializer.validated_data["source_text_es"],
-        translated_text_gn=serializer.validated_data["translated_text_gn"],
-        notes=serializer.validated_data.get("notes", ""),
+        source_text_es=s.validated_data["source_text_es"],
+        translated_text_gn=s.validated_data["translated_text_gn"],
+        notes=s.validated_data.get("notes", ""),
     )
     return Response({"id": entry.id}, status=201)
+
+
+# ------------- Written Exercises APIs ------------- #
 
 @login_required
 @api_view(["POST"])
@@ -105,6 +136,7 @@ def api_submit_fillblank(request):
     _update_lesson_progress(request.user, ex.lesson)
     return Response({"score": score, "is_correct": is_correct}, status=200)
 
+
 @login_required
 @api_view(["POST"])
 def api_submit_mcq(request):
@@ -112,11 +144,12 @@ def api_submit_mcq(request):
     s.is_valid(raise_exception=True)
     ex = get_object_or_404(MultipleChoiceExercise, pk=s.validated_data["exercise_id"])
     selected = s.validated_data["selected_key"].strip().upper()
-    is_correct = (selected == ex.correct_key.strip().upper())
+    is_correct = selected == ex.correct_key.strip().upper()
     score = 100.0 if is_correct else 0.0
     _save_user_result(request.user, ex, score, is_correct)
     _update_lesson_progress(request.user, ex.lesson)
     return Response({"score": score, "is_correct": is_correct}, status=200)
+
 
 @login_required
 @api_view(["POST"])
@@ -125,12 +158,12 @@ def api_submit_matching(request):
     s.is_valid(raise_exception=True)
     ex = get_object_or_404(MatchingExercise, pk=s.validated_data["exercise_id"])
     submitted_pairs = s.validated_data["pairs"]
-    correct_map = {(p.left_text.strip().lower()): p.right_text.strip().lower() for p in ex.pairs.all()}
+    correct_map = {p.left_text.strip().lower(): p.right_text.strip().lower() for p in ex.pairs.all()}
     total = len(correct_map) or 1
     correct_count = 0
     for item in submitted_pairs:
-        left = item.get("left", "").strip().lower()
-        right = item.get("right", "").strip().lower()
+        left = (item.get("left") or "").strip().lower()
+        right = (item.get("right") or "").strip().lower()
         if correct_map.get(left) == right:
             correct_count += 1
     score = (correct_count / total) * 100.0
@@ -139,13 +172,16 @@ def api_submit_matching(request):
     _update_lesson_progress(request.user, ex.lesson)
     return Response({"score": score, "correct": correct_count, "total": total}, status=200)
 
+
+# ------------- Pronunciation APIs ------------- #
+
 @login_required
 @api_view(["POST"])
 def api_save_pronunciation_attempt(request):
     s = PronunciationAttemptSerializer(data=request.data)
     s.is_valid(raise_exception=True)
     ex = get_object_or_404(PronunciationExercise, pk=s.validated_data["exercise_id"])
-    attempt = PronunciationAttempt.objects.create(
+    PronunciationAttempt.objects.create(
         user=request.user,
         exercise=ex,
         expected_text=s.validated_data["expected_text"],
@@ -155,7 +191,8 @@ def api_save_pronunciation_attempt(request):
         prosody_score=s.validated_data.get("prosody_score", 0.0),
     )
     _update_lesson_progress(request.user, ex.lesson)
-    return Response({"id": attempt.id}, status=201)
+    return Response({"status": "ok"}, status=201)
+
 
 @login_required
 @api_view(["GET"])
@@ -167,17 +204,21 @@ def api_azure_token(request):
     except Exception as e:
         return Response({"detail": str(e)}, status=500)
 
+
+# ------------- Internal helpers ------------- #
+
 def _save_user_result(user, exercise_obj, score: float, is_correct: bool):
     ct = ContentType.objects.get_for_model(type(exercise_obj))
     obj, created = UserExerciseResult.objects.get_or_create(
         user=user, content_type=ct, object_id=exercise_obj.id,
-        defaults={"score": score, "is_correct": is_correct, "attempts": 1}
+        defaults={"score": score, "is_correct": is_correct, "attempts": 1},
     )
     if not created:
         obj.score = max(obj.score, score)
         obj.is_correct = obj.is_correct or is_correct
         obj.attempts += 1
         obj.save()
+
 
 def _update_lesson_progress(user, lesson):
     ct_fb = ContentType.objects.get_for_model(FillBlankExercise)
@@ -202,7 +243,7 @@ def _update_lesson_progress(user, lesson):
             avg_acc = PronunciationAttempt.objects.filter(user=user, exercise_id=ex_id).aggregate(avg=Avg("accuracy_score"))["avg"]
             if avg_acc is not None:
                 best_per_ex.append(avg_acc)
-        pronun_avg = sum(best_per_ex)/len(best_per_ex) if best_per_ex else 0.0
+        pronun_avg = sum(best_per_ex) / len(best_per_ex) if best_per_ex else 0.0
     else:
         pronun_avg = 0.0
 
@@ -214,3 +255,201 @@ def _update_lesson_progress(user, lesson):
     obj.progress_percent = progress_percent
     obj.completed = progress_percent >= 90.0
     obj.save()
+
+
+# ------------- SRS (AI scheduler + mode switcher) ------------- #
+
+def _get_or_create_default_deck(user):
+    deck, _ = SRSDeck.objects.get_or_create(user=user, name="Mi Glosario")
+    return deck
+
+def _get_or_create_user_state(user, deck):
+    state, _ = SRSUserState.objects.get_or_create(user=user, deck=deck)
+    return state
+
+def _mode_default_limit(mode: str) -> int:
+    return {"beginner": 10, "comfortable": 15, "aggressive": 25}.get(mode or "comfortable", 15)
+
+def _apply_daily_reset_to_state(state: SRSUserState):
+    today = timezone.now().date()
+    if state.new_shown_on != today:
+        state.new_shown_on = today
+        state.new_shown_count = 0
+        if not state.new_limit:
+            state.new_limit = _mode_default_limit(state.mode)
+        state.save(update_fields=["new_shown_on", "new_shown_count", "new_limit", "updated_at"])
+
+@login_required
+@ensure_csrf_cookie
+def srs_study_view(request):
+    deck = _get_or_create_default_deck(request.user)
+    _sync_cards_from_glossary(request.user, deck)
+    # Ensure state exists and daily reset applied
+    state = _get_or_create_user_state(request.user, deck)
+    _apply_daily_reset_to_state(state)
+    return render(request, "learning/srs_study.html", {"deck": deck})
+
+def _sync_cards_from_glossary(user, deck):
+    existing = set(Flashcard.objects.filter(user=user, deck=deck).values_list("front_text_es", "back_text_gn"))
+    to_create = []
+    for e in GlossaryEntry.objects.filter(user=user):
+        key = (e.source_text_es.strip(), e.translated_text_gn.strip())
+        if key not in existing:
+            to_create.append(Flashcard(
+                user=user, deck=deck,
+                front_text_es=e.source_text_es.strip(),
+                back_text_gn=e.translated_text_gn.strip(),
+                notes=e.notes or "",
+                due_at=timezone.now(),
+            ))
+    if to_create:
+        Flashcard.objects.bulk_create(to_create)
+
+@login_required
+@api_view(["POST"])
+def api_srs_sync(request):
+    deck = _get_or_create_default_deck(request.user)
+    _sync_cards_from_glossary(request.user, deck)
+    state = _get_or_create_user_state(request.user, deck)
+    _apply_daily_reset_to_state(state)
+    return Response({"status": "ok"}, status=200)
+
+@login_required
+@api_view(["GET"])
+def api_srs_state(request):
+    deck = _get_or_create_default_deck(request.user)
+    state = _get_or_create_user_state(request.user, deck)
+    _apply_daily_reset_to_state(state)
+    now = timezone.now()
+    due_reviews = Flashcard.objects.filter(
+        user=request.user, deck=deck, suspended=False,
+        repetitions__gt=0, due_at__lte=now
+    ).count()
+    new_available = Flashcard.objects.filter(
+        user=request.user, deck=deck, suspended=False,
+        repetitions=0
+    ).count()
+    allowed_new = max(0, (state.new_limit or _mode_default_limit(state.mode)) - state.new_shown_count)
+    return Response({
+        "mode": state.mode,
+        "new_limit": state.new_limit,
+        "new_shown_today": state.new_shown_count,
+        "allowed_new_today": allowed_new,
+        "due_review_count": due_reviews,
+        "new_available_count": new_available,
+    }, status=200)
+
+@login_required
+@api_view(["POST"])
+def api_srs_set_mode(request):
+    mode = (request.data.get("mode") or "").lower().strip()
+    if mode not in {"beginner", "comfortable", "aggressive"}:
+        return Response({"detail": "invalid mode"}, status=400)
+    deck = _get_or_create_default_deck(request.user)
+    state = _get_or_create_user_state(request.user, deck)
+    state.mode = mode
+    state.new_limit = _mode_default_limit(mode)
+    state.save(update_fields=["mode", "new_limit", "updated_at"])
+    _apply_daily_reset_to_state(state)
+    return api_srs_state(request)
+
+@login_required
+@api_view(["POST"])
+def api_srs_next(request):
+    deck = _get_or_create_default_deck(request.user)
+    _sync_cards_from_glossary(request.user, deck)
+    state = _get_or_create_user_state(request.user, deck)
+    _apply_daily_reset_to_state(state)
+
+    now = timezone.now()
+
+    # 1) Prefer due review cards (repetitions > 0)
+    qs = Flashcard.objects.filter(
+        user=request.user, deck=deck, suspended=False,
+        repetitions__gt=0, due_at__lte=now
+    ).order_by("due_at")
+    card = qs.first()
+    if not card:
+        # 2) Otherwise allow new cards (repetitions == 0) within today's cap
+        allowed_new = max(0, (state.new_limit or _mode_default_limit(state.mode)) - state.new_shown_count)
+        if allowed_new <= 0:
+            return Response({"detail": "no_cards", "reason": "new_cap_reached"}, status=200)
+        card = Flashcard.objects.filter(
+            user=request.user, deck=deck, suspended=False, repetitions=0
+        ).order_by("created_at").first()
+        if not card:
+            return Response({"detail": "no_cards"}, status=200)
+        # Count it as a shown new card for today
+        state.new_shown_on = now.date()
+        state.new_shown_count += 1
+        state.save(update_fields=["new_shown_on", "new_shown_count", "updated_at"])
+
+    data = {
+        "id": card.id,
+        "front_es": card.front_text_es,
+        "back_gn": card.back_text_gn,
+        "notes": card.notes,
+        "due_at": card.due_at.isoformat(),
+        "interval_days": card.interval_days,
+        "repetitions": card.repetitions,
+        "ease_factor": round(card.ease_factor, 2),
+        "ai_difficulty": round(card.ai_difficulty, 2),
+        "half_life_days": round(card.half_life_days, 2),
+    }
+    return Response({"card": data}, status=200)
+
+@login_required
+@api_view(["POST"])
+def api_srs_grade(request):
+    s = SRSGradeSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    card = get_object_or_404(Flashcard, pk=s.validated_data["card_id"], user=request.user)
+    rating = s.validated_data["rating"]
+
+    state = _get_or_create_user_state(request.user, card.deck)
+    interval, half_life, p0 = grade_and_schedule(card, state, rating)
+
+    ReviewLog.objects.create(
+        user=request.user, card=card, rating=rating,
+        interval_before=card.interval_days, interval_after=interval,
+        ef_before=card.ease_factor, ef_after=card.ease_factor,
+    )
+
+    return Response({
+        "status": "ok",
+        "next_due": card.due_at.isoformat(),
+        "interval_days": interval,
+        "half_life": round(half_life, 2),
+        "pred_mastery": round(p0, 2),
+    }, status=200)
+
+@login_required
+@api_view(["POST"])
+def api_glossary_bulk_add(request):
+    """
+    Bulk add glossary items: { "items": [ {source_text_es, translated_text_gn, notes?}, ... ] }
+    Also syncs SRS cards from the glossary.
+    """
+    s = BulkGlossaryListSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    items = s.validated_data["items"]
+
+    created = 0
+    for it in items:
+        es = it["source_text_es"].strip()
+        gn = it["translated_text_gn"].strip()
+        notes = (it.get("notes") or "").strip()
+        obj, made = GlossaryEntry.objects.get_or_create(
+            user=request.user,
+            source_text_es=es,
+            translated_text_gn=gn,
+            defaults={"notes": notes},
+        )
+        if made:
+            created += 1
+
+    # Ensure SRS cards exist for the new entries
+    deck = _get_or_create_default_deck(request.user)
+    _sync_cards_from_glossary(request.user, deck)
+
+    return Response({"created": created}, status=201)

@@ -1,0 +1,36 @@
+{
+  "title": "Saludos básicos",
+  "description": "Saludos y frases iniciales en guaraní",
+  "order": 1,
+  "is_published": true,
+  "sections": [
+    { "title": "Introducción", "body": "Aprende saludos comunes en guaraní." }
+  ],
+  "fillblanks": [
+    { "prompt_text": "Mba'éichapa, ____?", "correct_answer": "nde" }
+  ],
+  "mcqs": [
+    {
+      "question_text": "¿Cómo se dice 'Buenos días'?",
+      "choices": [
+        { "key": "A", "text": "Maitei" },
+        { "key": "B", "text": "Ko'ẽ porã" },
+        { "key": "C", "text": "Ka'aru porã" }
+      ],
+      "correct_key": "B"
+    }
+  ],
+  "matching": [
+    {
+      "instructions": "Relaciona español con guaraní",
+      "pairs": [
+        { "left": "Hola", "right": "Maitei" },
+        { "left": "Gracias", "right": "Aguyje" }
+      ]
+    }
+  ],
+  "pronunciation": [
+    { "text_guarani": "Maitei" },
+    { "text_guarani": "Ko'ẽ porã" }
+  ]
+}
