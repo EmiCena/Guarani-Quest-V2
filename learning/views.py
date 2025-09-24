@@ -36,7 +36,50 @@ from .services.azure_speech import issue_azure_speech_token
 from .services.scoring import levenshtein_ratio
 from .services.ai_srs import grade_and_schedule
 
+# learning/views.py
+import os, hashlib, subprocess, shutil
+from django.http import FileResponse, JsonResponse, HttpResponse
+from django.conf import settings
 
+def tts_view(request):
+    """
+    Devuelve audio WAV generado offline con espeak-ng.
+    GET:
+      text: texto a leer
+      lang: 'gn' (Guaraní) o 'es' (por defecto 'gn')
+    """
+    text = (request.GET.get("text") or "").strip()
+    lang = (request.GET.get("lang") or "gn").strip()
+    if not text:
+        return HttpResponse("Missing text", status=400)
+    if len(text) > 240:
+        text = text[:240]
+
+    exe = getattr(settings, "ESPEAK_NG_EXE", None) or shutil.which("espeak-ng") or shutil.which("espeak")
+    if not exe:
+        return JsonResponse({"error": "espeak-ng not found"}, status=501)
+
+    # Cache por lang+texto
+    h = hashlib.sha1(f"{lang}:{text}".encode("utf-8")).hexdigest()[:16]
+    cache_dir = os.path.join(settings.MEDIA_ROOT, "tts-cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    wav_path = os.path.join(cache_dir, f"{lang}-{h}.wav")
+
+    if not os.path.exists(wav_path):
+        cmd = [exe, "-v", lang, "-s", "165", "-p", "30", "-w", wav_path, text]
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            if lang.lower() != "gn":
+                try:
+                    subprocess.run([exe, "-v", "gn", "-s", "165", "-p", "30", "-w", wav_path, text],
+                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except Exception:
+                    return JsonResponse({"error": "TTS failed"}, status=500)
+            else:
+                return JsonResponse({"error": "TTS failed"}, status=500)
+
+    return FileResponse(open(wav_path, "rb"), content_type="audio/wav")
 # ------------- Auth / Basic pages ------------- #
 
 def signup(request):
@@ -581,3 +624,77 @@ def api_glossary_upload_audio(request, pk):
     filename = f"gloss_{entry.id}_{int(time.time())}{ext}"
     entry.audio_pronunciation.save(filename, f, save=True)
     return Response({"url": entry.audio_pronunciation.url}, status=200)
+
+def _pick_espeak_exe():
+    return getattr(settings, "ESPEAK_NG_EXE", None) or shutil.which("espeak-ng") or shutil.which("espeak")
+
+def _clean_text_for_tts(text: str, ensure_punct=True) -> str:
+    t = re.sub(r"\s+", " ", text or "").strip()
+    t = t.replace("“","\"").replace("”","\"").replace("’","'").replace("‘","'")
+    if ensure_punct and t and t[-1] not in ".!?…":
+        t += "."
+    return t
+
+def tts_view(request):
+    text = (request.GET.get("text") or "").strip()
+    lang = (request.GET.get("lang") or "gn").strip().lower()
+    preset = (request.GET.get("preset") or "").strip().lower() or None
+
+    if not text:
+        return HttpResponse("Missing text", status=400)
+    if len(text) > 300:
+        text = text[:300]
+
+    exe = _pick_espeak_exe()
+    if not exe:
+        return JsonResponse({"error": "espeak-ng not found"}, status=501)
+
+    # Config/preset (si usas settings TTS_ESPEAK_CONFIG; si no, valores por defecto)
+    cfg_all = getattr(settings, "TTS_ESPEAK_CONFIG", {}) or {}
+    base = dict(cfg_all.get("default", {}))
+    base.update((cfg_all.get("lang_overrides", {}) or {}).get(lang, {}))
+    if preset:
+        base.update((cfg_all.get("presets", {}) or {}).get(preset, {}).get(lang, {}))
+
+    voice = (base.get("voice") or lang)
+    variant = base.get("variant") or None
+    voice_tag = f"{voice}+{variant}" if variant else voice
+    cleaned = _clean_text_for_tts(text, ensure_punct=bool(base.get("ensure_punct", True)))
+
+    sig = f"{voice_tag}:{base.get('speed')}:{base.get('pitch')}:{base.get('amplitude')}:{base.get('gap')}:{cleaned}"
+    h = hashlib.sha1(sig.encode("utf-8")).hexdigest()[:16]
+    cache_dir = os.path.join(settings.MEDIA_ROOT, "tts-cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    wav_path = os.path.join(cache_dir, f"{voice_tag}-{h}.wav")
+
+    if not os.path.exists(wav_path):
+        cmd = [
+            exe,
+            "-v", voice_tag,
+            "-s", str(base.get("speed", 155)),
+            "-p", str(base.get("pitch", 45)),
+            "-a", str(base.get("amplitude", 160)),
+            "-g", str(base.get("gap", 6)),
+            "-w", wav_path,
+            cleaned,
+        ]
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            if voice_tag != voice:
+                try:
+                    subprocess.run([
+                        exe, "-v", voice,
+                        "-s", str(base.get("speed", 155)),
+                        "-p", str(base.get("pitch", 45)),
+                        "-a", str(base.get("amplitude", 160)),
+                        "-g", str(base.get("gap", 6)),
+                        "-w", wav_path,
+                        cleaned,
+                    ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except Exception:
+                    return JsonResponse({"error": "TTS failed"}, status=500)
+            else:
+                return JsonResponse({"error": "TTS failed"}, status=500)
+
+    return FileResponse(open(wav_path, "rb"), content_type="audio/wav")

@@ -7,6 +7,7 @@ from django.views.generic import RedirectView
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("django.contrib.auth.urls")),
-    path("learning/", include("learning.urls")),  # include the app urls
+    path("learning/", include("learning.urls")), 
+     # include the app urls
     path("", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

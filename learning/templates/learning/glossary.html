@@ -19,28 +19,40 @@
     {% for e in entries %}
       <div class="flash" tabindex="0" data-es="{{ e.source_text_es|lower }}" data-gn="{{ e.translated_text_gn|lower }}">
         <div class="flash-inner">
+          <!-- Frente: Guaraní -->
           <div class="face face-front">
             <div class="tag">Guaraní</div>
             <h3 class="word">{{ e.translated_text_gn }}</h3>
             <div class="actions">
               {% if e.audio_pronunciation %}
                 <audio id="audio-{{ e.id }}" src="{{ e.audio_pronunciation.url }}"></audio>
-                <button class="qx-btn qx-outline btn-sm" onclick="document.getElementById('audio-{{ e.id }}').play()">🔊 Reproducir</button>
+                <button class="qx-btn qx-outline btn-sm"
+                        onclick="event.stopPropagation(); document.getElementById('audio-{{ e.id }}').play()">🔊 Reproducir</button>
               {% else %}
-                <button class="qx-btn qx-outline btn-sm" onclick="qxSpeak('{{ e.translated_text_gn|escapejs }}')">🔊 TTS</button>
+                <button class="qx-btn qx-outline btn-sm"
+                        onclick="event.stopPropagation(); ttsSpeak('{{ e.translated_text_gn|escapejs }}','gn','suave')">🔊 TTS</button>
               {% endif %}
             </div>
           </div>
+
+          <!-- Dorso: Español -->
           <div class="face face-back">
             <div class="tag">Español</div>
             <h3 class="word">{{ e.source_text_es }}</h3>
             {% if e.notes %}<div class="sub">“{{ e.notes }}”</div>{% endif %}
+
             <div class="rec-controls" id="rec-{{ e.id }}">
-              <button class="qx-btn btn-sm" onclick="startRec({{ e.id }})">● Grabar</button>
-              <button class="qx-btn qx-outline btn-sm" onclick="stopRec({{ e.id }})">■ Detener</button>
-              <button class="qx-btn qx-outline btn-sm" onclick="saveRec({{ e.id }})">⬆ Guardar</button>
+              <button class="qx-btn btn-sm" onclick="event.stopPropagation(); startRec({{ e.id }})">● Grabar</button>
+              <button class="qx-btn qx-outline btn-sm" onclick="event.stopPropagation(); stopRec({{ e.id }})">■ Detener</button>
+              <button class="qx-btn qx-outline btn-sm" onclick="event.stopPropagation(); saveRec({{ e.id }})">⬆ Guardar</button>
               <span class="hint" id="hint-{{ e.id }}"></span>
             </div>
+
+            <div style="margin-top:8px;">
+              <button class="qx-btn qx-outline btn-sm"
+                      onclick="event.stopPropagation(); ttsSpeak('{{ e.source_text_es|escapejs }}','es','suave')">🔊 TTS (ES)</button>
+            </div>
+
             <audio id="prev-{{ e.id }}" controls style="display:none;margin-top:8px;"></audio>
           </div>
         </div>
@@ -58,6 +70,7 @@
 {% endblock %}
 
 {% block extra_js %}
+  <script src="{% static 'js/tts.js' %}"></script>
   <script src="{% static 'js/glossary.js' %}"></script>
   <script src="{% static 'js/flashcards.js' %}"></script>
 {% endblock %}

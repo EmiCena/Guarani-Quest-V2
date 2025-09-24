@@ -36,4 +36,5 @@ path("api/exercises/listening/", views.api_submit_listening, name="api_submit_li
 path("api/exercises/translation/", views.api_submit_translation, name="api_submit_translation"),
 
 path("api/glossary/<int:pk>/upload-audio/", views.api_glossary_upload_audio, name="api_glossary_upload_audio"),
+path("api/tts/", views.tts_view, name="tts"),
 ]

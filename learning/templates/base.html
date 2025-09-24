@@ -72,6 +72,9 @@
     }
     function getCSRFToken(){ return getCookie('csrftoken') || (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')||''); }
   </script>
+  {% load static %}
+<!-- al final del body -->
+<script src="{% static 'js/tts.js' %}"></script>
   <script src="{% static 'js/ui.js' %}"></script>
   <script src="{% static 'js/theme.js' %}"></script>
   {% block extra_js %}{% endblock %}

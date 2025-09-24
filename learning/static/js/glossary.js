@@ -1,7 +1,87 @@
 // learning/static/js/glossary.js
+
+// --- CSRF fallback (por si no está definido globalmente) ---
+(function(){
+  if (typeof window.getCSRFToken !== 'function') {
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        for (const c of document.cookie.split(';')) {
+          const cookie = c.trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    window.getCSRFToken = function () {
+      return getCookie('csrftoken') ||
+             (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+    };
+  }
+})();
+
+// --- TTS (Web Speech -> fallback espeak-ng endpoint) ---
+(function(){
+  function pickVoiceFor(lang) {
+    const voices = (window.speechSynthesis?.getVoices?.() || []);
+    const lc = (lang || "").toLowerCase();
+    const byLang = voices.find(v => v.lang?.toLowerCase().startsWith(lc));
+    if (byLang) return byLang;
+    if (lc.startsWith("gn")) {
+      const byName = voices.find(v => /guaran[ií]/i.test(v.name || ""));
+      if (byName) return byName;
+    }
+    return null;
+  }
+
+  function speakWeb(text, lang) {
+    return new Promise((resolve, reject) => {
+      if (!("speechSynthesis" in window)) return reject(new Error("No speechSynthesis"));
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickVoiceFor(lang);
+      if (v) { u.voice = v; u.lang = v.lang; } else if (lang) { u.lang = lang; }
+      u.rate = 0.95;
+      u.onend = resolve;
+      u.onerror = reject;
+      speechSynthesis.speak(u);
+    });
+  }
+
+  window.qxSpeak = async function(text, lang = "gn") {
+    if (!text) return;
+    try {
+      if (speechSynthesis && speechSynthesis.onvoiceschanged != null) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      const v = pickVoiceFor(lang);
+      if (v) { await speakWeb(text, lang); return; }
+    } catch (_) {}
+    const url = `/learning/api/tts/?lang=${encodeURIComponent(lang)}&text=${encodeURIComponent(text)}`;
+    const audio = new Audio(url);
+    try { await audio.play(); } catch (e) { console.error("TTS play error", e); }
+  };
+})();
+
+// --- Búsqueda/filtro en glosario ---
+window.qxFilterGlossary = function() {
+  const q = (document.getElementById("glossary-search")?.value || "").trim().toLowerCase();
+  const norm = (s) => s.normalize?.("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase?.() || s.toLowerCase();
+  const qn = norm(q);
+  document.querySelectorAll("#flash-grid .flash").forEach(card => {
+    const es = norm(card.dataset.es || "");
+    const gn = norm(card.dataset.gn || "");
+    const match = !qn || es.includes(qn) || gn.includes(qn);
+    card.style.display = match ? "" : "none";
+  });
+};
+
+// --- Traducción + agregar (lo tuyo, intacto) ---
 async function translateAndAdd() {
   const el = document.getElementById("gloss-source");
-  const text = el.value.trim();
+  const text = el?.value?.trim() || "";
   if (!text) { alert("Ingresa un texto en español"); return; }
 
   try {
@@ -11,23 +91,18 @@ async function translateAndAdd() {
       body: JSON.stringify({ source_text_es: text })
     });
 
-    // If server rejected, fallback to manual prompt
     if (!resp.ok) {
       return await manualPromptAndAdd(text);
     }
 
     const data = await resp.json();
-
-    // If the server signals fallback, prompt manual
     if (data.fallback) {
       return await manualPromptAndAdd(text);
     }
 
-    // Success path: translation returned and saved
     addGlossaryListItem(text, data.translated_text_gn);
     el.value = "";
   } catch (e) {
-    // Network or JSON parse issue -> manual fallback
     await manualPromptAndAdd(text);
   }
 }
@@ -59,7 +134,7 @@ function addGlossaryListItem(es, gn) {
   list.prepend(li);
 }
 
-// Existing helpers for exercises (unchanged)
+// --- Ejercicios (tus helpers intactos) ---
 window.submitFillBlank = async function (id) {
   const root = document.getElementById(`fillblank-${id}`);
   const input = root.querySelector("input[name='answer']");
@@ -90,9 +165,7 @@ window.submitMatching = async function (id) {
   const root = document.getElementById(`matching-${id}`);
   const selects = root.querySelectorAll("select.match-right");
   const pairs = [];
-  selects.forEach(s => {
-    pairs.push({ left: s.dataset.left, right: s.value });
-  });
+  selects.forEach(s => { pairs.push({ left: s.dataset.left, right: s.value }); });
   const resp = await fetch("/learning/api/exercises/matching/", {
     method: "POST",
     headers: {"Content-Type":"application/json","X-CSRFToken": getCSRFToken()},
@@ -102,7 +175,6 @@ window.submitMatching = async function (id) {
   root.querySelector(".feedback").innerHTML = `Correctas: ${data.correct}/${data.total} — Puntaje: ${data.score?.toFixed ? data.score.toFixed(1) : ''}%`;
 }
 
-// Optional: manual add quick action (kept from earlier)
 window.addManual = async function () {
   const es = document.getElementById("manual-es").value.trim();
   const gn = document.getElementById("manual-gn").value.trim();

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <style>
+    /* Toolbar */
+    .srs-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px}
+    .segment{display:inline-flex;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}
+    .seg-btn{border:0;background:#fff;padding:6px 10px;cursor:pointer}
+    .seg-btn.active{background:#eef2ff;color:#4338ca;font-weight:600}
+    .btn,.btn-secondary,.btn-outline{padding:8px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+    .btn{background:#4f46e5;color:#fff}
+    .btn-secondary{background:#f3f4f6;color:#111827;border-color:#e5e7eb}
+    .btn-outline{background:#fff;color:#111827;border-color:#e5e7eb}
+    .counter{color:#374151;font-size:.95rem}
+    .tip{color:#6b7280;font-size:.9rem;margin-left:auto}
+
+    /* Gauge */
+    .gauge{--val:0;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;
+      background: conic-gradient(#7c3aed calc(var(--val) * 1%), #e5e7eb 0);color:#111827;font-weight:700;font-size:.8rem}
+    .gauge > span{background:#fff;border-radius:999px;padding:2px 6px}
+
+    /* Flip card */
+    .flip-wrap{perspective:1000px;}
+    .flip-card{position:relative;min-height:180px}
+    .flip-inner{position:relative;width:100%;min-height:180px;transition:transform .6s;transform-style:preserve-3d;cursor:pointer}
+    .flip-card.flipped .flip-inner{transform:rotateY(180deg)}
+    .face{position:absolute;inset:0;padding:14px;backface-visibility:hidden;border-radius:12px;background:#fff;border:1px solid #e5e7eb}
+    .face-back{transform:rotateY(180deg)}
+    .front-text{font-size:22px;font-weight:800}
+    .back-text{font-size:18px;color:#6b7280}
+    .side-toolbar{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+    .side-toolbar button{padding:6px 8px}
+    /* Toasts */
+    #toasts{position:fixed;right:16px;top:16px;display:grid;gap:8px;z-index:10000}
+    .toast{background:#111827;color:#fff;padding:8px 12px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+    .toast.good{background:#065f46}
+    /* Confetti */
+    .confetti-piece{position:fixed;top:-10vh;width:8px;height:14px;border-radius:2px;opacity:.9;animation: confetti-fall 1.5s ease-out forwards}
+    @keyframes confetti-fall{to { transform: translateY(120vh) rotate(720deg); opacity: 1; }}
+  </style>
+
+  <h2 style="margin:8px 0 14px;">Repaso (SRS) — {{ deck.name }}</h2>
+
+  <div class="card srs-toolbar">
+    <div class="segment" role="tablist" aria-label="Modo de estudio">
+      <button class="seg-btn" id="mode-beginner"    onclick="setMode('beginner')">Beginner</button>
+      <button class="seg-btn" id="mode-comfortable" onclick="setMode('comfortable')">Comfortable</button>
+      <button class="seg-btn" id="mode-aggressive"  onclick="setMode('aggressive')">Aggressive</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+      <div class="gauge" id="gauge" style="--val:0;"><span id="gauge-text">0%</span></div>
+      <div class="counter">Nuevas hoy: <b><span id="new-count">0</span>/<span id="new-limit">0</span></b></div>
+      <div class="counter">Vencidas: <b><span id="due-count">0</span></b></div>
+      <button class="btn-secondary btn-sm" type="button" onclick="toggleReverse()">Modo inverso</button>
+    </div>
+    <div class="tip">Clic en la tarjeta = voltear · Space = voltear · 0–5 = calificar · Enter/N = siguiente</div>
+  </div>
+
+  <div class="flip-wrap">
+    <div id="flip-card" class="flip-card card">
+      <div id="flip-inner" class="flip-inner" onclick="srsShow()">
+        <!-- Frente -->
+        <div class="face face-front">
+          <div class="side-toolbar">
+            <button type="button" class="btn-secondary btn-sm" onclick="event.stopPropagation(); srsSpeakFront()">🔊</button>
+          </div>
+          <div id="front" class="front-text">Cargando...</div>
+          <div id="notes" style="display:none;margin-top:6px;color:#6b7280;"></div>
+        </div>
+        <!-- Dorso -->
+        <div class="face face-back">
+          <div class="side-toolbar">
+            <button type="button" class="btn-secondary btn-sm" onclick="event.stopPropagation(); srsSpeakBack()">🔊</button>
+          </div>
+          <div id="back" class="back-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin:12px 0; display:flex; gap:10px; flex-wrap: wrap;">
+    <button class="btn-secondary" type="button" onclick="srsSkip()">Saltar</button>
+  </div>
+
+  <div id="grades" style="display:none;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      <button class="btn-secondary" type="button" onclick="srsGrade(0)" data-rating="0">0</button>
+      <button class="btn-secondary" type="button" onclick="srsGrade(1)" data-rating="1">1</button>
+      <button class="btn-secondary" type="button" onclick="srsGrade(2)" data-rating="2">2</button>
+      <button class="btn-secondary" type="button" onclick="srsGrade(3)" data-rating="3">3</button>
+      <button class="btn-outline"   type="button" onclick="srsGrade(4)" data-rating="4">4</button>
+      <button class="btn"           type="button" onclick="srsGrade(5)" data-rating="5">5 Perfecto</button>
+    </div>
+  </div>
+
+  <div id="toasts" aria-live="polite" aria-atomic="true"></div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/tts.js' %}"></script>
+  <script src="{% static 'js/srs.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.srsInit) window.srsInit();
+    });
+  </script>
+{% endblock %}
