@@ -13,8 +13,68 @@
       {% endif %}
       <a class="qx-btn qx-outline" href="{% url 'srs_study' %}">Estudiar (SRS)</a>
       <a class="qx-btn qx-outline" href="{% url 'glossary' %}">Glosario</a>
+      {% if user.is_staff %}
+        <a class="qx-btn" href="{% url 'create_lesson_ai' %}" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);border-color:#8b5cf6;">🤖 Crear con IA</a>
+      {% endif %}
     </div>
   </section>
+
+  <!-- Gamification Stats -->
+  {% if user.is_authenticated %}
+  <section class="bento-grid" style="margin:20px 0;">
+    <!-- Points and Streak Card -->
+    <div class="bento-card bento-accent col-span-6">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 class="bento-title" style="margin:0;color:var(--green);">¡Hola, {{ user.username }}! 👋</h3>
+          <p class="bento-desc">Tu progreso en Guaraní Quest</p>
+        </div>
+        <div class="bento-icon">🎯</div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:24px;font-weight:900;color:var(--green);">{{ points|default:0 }}</div>
+          <div style="font-size:12px;color:var(--muted);">Puntos</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:24px;font-weight:900;color:var(--green);">{{ streak|default:0 }}</div>
+          <div style="font-size:12px;color:var(--muted);">Días de racha</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pet Status Card -->
+    {% if pet %}
+    <div class="bento-card col-span-6">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 class="bento-title" style="margin:0;">{{ pet.name }} (Nivel {{ pet.level }})</h3>
+          <p class="bento-desc">{{ pet.get_mood_display }} • {{ pet.get_species_display }}</p>
+        </div>
+        <div class="bento-icon">🐾</div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:900;">{{ pet.happiness }}%</div>
+          <div style="font-size:12px;color:var(--muted);">Felicidad</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:900;">{{ pet.energy }}%</div>
+          <div style="font-size:12px;color:var(--muted);">Energía</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:900;">{{ pet.experience }}/{{ pet.level|add:"100" }}</div>
+          <div style="font-size:12px;color:var(--muted);">Experiencia</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="progress"><div class="bar" style="width: {{ pet.happiness }}%"></div></div>
+        <small style="color:var(--muted);margin-top:4px;display:block;">{{ pet.get_random_message }}</small>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
 
   <!-- Quick stats -->
   <section class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">

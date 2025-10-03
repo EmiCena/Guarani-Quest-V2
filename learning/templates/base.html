@@ -37,17 +37,50 @@
         <a href="{% url 'lessons_overview' %}">Lecciones</a>
         <a href="{% url 'exercises' %}">Ejercicios</a>
         <a href="{% url 'glossary' %}">Glosario</a>
+        {% if user.is_staff %}
+          <a href="{% url 'create_lesson_ai' %}">🤖 Crear con IA</a>
+        {% endif %}
       </nav>
       <div class="qx-actions">
-  <button class="qx-btn qx-outline" id="theme-toggle" onclick="toggleTheme()" title="Tema claro/oscuro">🌙</button>
-  {% if user.is_authenticated %}
-    <a class="qx-btn qx-outline" href="/admin/">Admin</a>
-    <a class="qx-btn" href="{% url 'logout' %}">Salir</a>
-  {% else %}
-    <a class="qx-btn qx-outline" href="{% url 'signup' %}">Regístrate</a>
-    <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
-  {% endif %}
-</div>
+        <!-- Gamification Elements -->
+        {% if user.is_authenticated %}
+          <div class="qx-gamification-nav">
+            <!-- Points and Streak -->
+            <div class="qx-points-display">
+              <span class="qx-points" title="Puntos">🏆 {{ user.profile.points }}</span>
+              <span class="qx-streak" title="Racha de días">🔥 {{ user.profile.streak }}</span>
+            </div>
+
+            <!-- Pet Status -->
+            {% if user.pet %}
+              <div class="qx-pet-status" title="Estado de {{ user.pet.name }}">
+                <span class="qx-pet-mood">{{ user.pet.get_mood_display|slice:":3" }}</span>
+                <span class="qx-pet-level">Lv.{{ user.pet.level }}</span>
+              </div>
+            {% endif %}
+
+            <!-- Quick Actions Menu -->
+            <div class="qx-quick-menu">
+              <button class="qx-btn qx-ghost qx-dropdown-toggle" onclick="toggleDropdown('gamification-menu')" title="Menú de gamificación">🎮</button>
+              <div id="gamification-menu" class="qx-dropdown">
+                <a href="javascript:void(0)" onclick="showDailyChallenges()" class="qx-dropdown-item">📅 Desafíos Diarios</a>
+                <a href="javascript:void(0)" onclick="showLeaderboard()" class="qx-dropdown-item">🏆 Tabla de Posiciones</a>
+                <a href="javascript:void(0)" onclick="interactWithPet()" class="qx-dropdown-item">🐾 Mascota</a>
+                <a href="javascript:void(0)" onclick="showAchievements()" class="qx-dropdown-item">🎯 Logros</a>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        <button class="qx-btn qx-outline" id="theme-toggle" onclick="toggleTheme()" title="Tema claro/oscuro">🌙</button>
+        {% if user.is_authenticated %}
+          <a class="qx-btn qx-outline" href="/admin/">Admin</a>
+          <a class="qx-btn" href="{% url 'logout' %}">Salir</a>
+        {% else %}
+          <a class="qx-btn qx-outline" href="{% url 'signup' %}">Regístrate</a>
+          <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
+        {% endif %}
+      </div>
       <button class="qx-burger" onclick="window.qxToggleMenu()">☰</button>
     </div>
   </header>

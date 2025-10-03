@@ -37,4 +37,20 @@ path("api/exercises/translation/", views.api_submit_translation, name="api_submi
 
 path("api/glossary/<int:pk>/upload-audio/", views.api_glossary_upload_audio, name="api_glossary_upload_audio"),
 path("api/tts/", views.tts_view, name="tts"),
+
+# AI-Powered Features
+path("api/ai-translate/", views.api_ai_translate, name="api_ai_translate"),
+path("api/ai-pronunciation-analysis/", views.api_ai_pronunciation_analysis, name="api_ai_pronunciation_analysis"),
+path("api/ai-generate-exercise/", views.api_ai_generate_exercise, name="api_ai_generate_exercise"),
+
+# Enhanced Gamification APIs
+path("api/user-profile/", views.api_user_profile, name="api_user_profile"),
+path("api/pet-interact/", views.api_pet_interact, name="api_pet_interact"),
+path("api/daily-challenges/", views.api_daily_challenges, name="api_daily_challenges"),
+path("api/update-daily-challenge/", views.api_update_daily_challenge, name="api_update_daily_challenge"),
+path("api/leaderboard/", views.api_leaderboard, name="api_leaderboard"),
+path("api/award-achievement/", views.api_award_achievement, name="api_award_achievement"),
+
+# AI Lesson Creation
+path("create-lesson-ai/", views.create_lesson_ai, name="create_lesson_ai"),
 ]

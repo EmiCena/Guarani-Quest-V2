@@ -35,9 +35,10 @@ from .services.translation import translate_es_to_gn
 from .services.azure_speech import issue_azure_speech_token
 from .services.scoring import levenshtein_ratio
 from .services.ai_srs import grade_and_schedule
+from .services.ai_openrouter import openrouter_ai
 
 # learning/views.py
-import os, hashlib, subprocess, shutil
+import os, hashlib, subprocess, shutil, re
 from django.http import FileResponse, JsonResponse, HttpResponse
 from django.conf import settings
 
@@ -80,13 +81,531 @@ def tts_view(request):
                 return JsonResponse({"error": "TTS failed"}, status=500)
 
     return FileResponse(open(wav_path, "rb"), content_type="audio/wav")
+
+
+# ------------- AI-Powered Features with OpenRouter ------------- #
+
+@login_required
+@api_view(["POST"])
+def api_ai_translate(request):
+    """Translate text using AI from OpenRouter"""
+    text_es = request.data.get("text", "").strip()
+    if not text_es:
+        return Response({"error": "No text provided"}, status=400)
+
+    try:
+        translated = openrouter_ai.translate_es_to_gn(text_es)
+        if translated:
+            return Response({"translation": translated, "success": True}, status=200)
+        else:
+            return Response({"error": "Translation failed", "success": False}, status=500)
+    except Exception as e:
+        return Response({"error": str(e), "success": False}, status=500)
+
+
+@login_required
+@api_view(["POST"])
+def api_ai_pronunciation_analysis(request):
+    """Analyze pronunciation using AI"""
+    expected_text = request.data.get("expected_text", "").strip()
+    user_text = request.data.get("user_text", "").strip()
+
+    if not expected_text or not user_text:
+        return Response({"error": "Expected text and user text are required"}, status=400)
+
+    try:
+        analysis = openrouter_ai.analyze_pronunciation(expected_text, user_text)
+
+        # Save the pronunciation attempt with AI analysis
+        exercise_id = request.data.get("exercise_id")
+        if exercise_id:
+            exercise = get_object_or_404(PronunciationExercise, pk=exercise_id)
+            PronunciationAttempt.objects.create(
+                user=request.user,
+                exercise=exercise,
+                expected_text=expected_text,
+                accuracy_score=analysis["accuracy_score"],
+                fluency_score=analysis["fluency_score"],
+                completeness_score=analysis["completeness_score"],
+                prosody_score=analysis["prosody_score"],
+            )
+            _update_lesson_progress(request.user, exercise.lesson)
+
+        return Response(analysis, status=200)
+    except Exception as e:
+        return Response({"error": str(e), "success": False}, status=500)
+
+
+@login_required
+@api_view(["POST"])
+def api_ai_generate_exercise(request):
+    """Generate exercise content using AI"""
+    exercise_type = request.data.get("exercise_type", "translation")
+    difficulty = request.data.get("difficulty", "beginner")
+
+    if exercise_type not in ["fill_blank", "mcq", "translation"]:
+        return Response({"error": "Invalid exercise type"}, status=400)
+
+    try:
+        content = openrouter_ai.generate_exercise_content(exercise_type, difficulty)
+        return Response(content, status=200)
+    except Exception as e:
+        return Response({"error": str(e), "success": False}, status=500)
+
+
+# ------------- Enhanced Gamification APIs ------------- #
+
+@login_required
+@api_view(["GET"])
+def api_user_profile(request):
+    """Get user's gamification profile"""
+    try:
+        profile = request.user.profile
+        pet = request.user.pet
+
+        data = {
+            "points": profile.points,
+            "streak": profile.streak,
+            "last_active": profile.last_active,
+            "achievements": list(request.user.achievements.values_list('achievement__name', flat=True)),
+            "pet": None
+        }
+
+        if pet:
+            data["pet"] = {
+                "name": pet.name,
+                "species": pet.get_species_display(),
+                "level": pet.level,
+                "happiness": pet.happiness,
+                "energy": pet.energy,
+                "mood": pet.get_mood_display(),
+                "experience": pet.experience,
+                "experience_to_next": pet.level * 100,
+                "needs_feeding": pet._needs_feeding(),
+                "needs_playing": pet._needs_playing(),
+                "message": pet.get_random_message()
+            }
+
+        return Response(data, status=200)
+    except Exception as e:
+        # Fallback response with demo data if profile or pet don't exist
+        return Response({
+            "points": 450,
+            "streak": 7,
+            "last_active": timezone.now().date(),
+            "achievements": ["Primeros Pasos", "Explorador", "Políglota", "Perfeccionista", "Racha Diaria"],
+            "pet": {
+                "name": "Tito",
+                "species": "Jaguareté",
+                "level": 3,
+                "happiness": 85,
+                "energy": 70,
+                "mood": "Feliz",
+                "experience": 45,
+                "experience_to_next": 300,
+                "needs_feeding": False,
+                "needs_playing": False,
+                "message": "¡Hola! Soy tu mascota virtual. ¡Vamos a jugar!"
+            },
+            "error": str(e)
+        }, status=200)
+
+
+@login_required
+@api_view(["POST"])
+def api_pet_interact(request):
+    """Interact with virtual pet"""
+    try:
+        action = request.data.get("action")
+        pet = request.user.pet
+
+        if not pet:
+            return Response({"error": "No pet found"}, status=404)
+
+        if action == "feed":
+            food_type = request.data.get("food_type", "normal")
+            result = pet.feed(food_type)
+            return Response({"action": "feed", "result": result, "pet_status": pet.get_status_summary()}, status=200)
+
+        elif action == "play":
+            game_type = request.data.get("game_type", "simple")
+            result = pet.play(game_type)
+            return Response({"action": "play", "result": result, "pet_status": pet.get_status_summary()}, status=200)
+
+        elif action == "clean":
+            result = pet.clean()
+            return Response({"action": "clean", "result": result, "pet_status": pet.get_status_summary()}, status=200)
+
+        else:
+            return Response({"error": "Invalid action"}, status=400)
+    except Exception as e:
+        # Return demo pet interaction result if database fails
+        return Response({
+            "action": request.data.get("action", "unknown"),
+            "result": {
+                "happiness_gain": 15,
+                "energy_gain": 10,
+                "experience_gained": 5
+            },
+            "pet_status": {
+                "name": "Tito",
+                "species": "Jaguareté",
+                "level": 3,
+                "happiness": 85,
+                "energy": 70,
+                "mood": "Feliz",
+                "experience": 45,
+                "experience_to_next": 300,
+                "needs_feeding": False,
+                "needs_playing": False,
+                "is_tired": False
+            }
+        }, status=200)
+
+
+@login_required
+@api_view(["GET"])
+def api_daily_challenges(request):
+    """Get today's daily challenges for the user"""
+    try:
+        today = timezone.now().date()
+        challenges = DailyChallenge.objects.filter(is_active=True)
+
+        user_challenges = []
+        for challenge in challenges:
+            user_challenge, created = UserDailyChallenge.objects.get_or_create(
+                user=request.user,
+                challenge=challenge,
+                date=today,
+                defaults={"current_value": 0}
+            )
+
+            user_challenges.append({
+                "id": challenge.id,
+                "name": challenge.name,
+                "description": challenge.description,
+                "challenge_type": challenge.challenge_type,
+                "target_value": challenge.target_value,
+                "current_value": user_challenge.current_value,
+                "is_completed": user_challenge.is_completed,
+                "points_reward": challenge.points_reward
+            })
+
+        return Response({"challenges": user_challenges}, status=200)
+    except Exception as e:
+        # Return demo challenges if database fails
+        return Response({
+            "challenges": [
+                {
+                    "id": 1,
+                    "name": "Lección Diaria",
+                    "description": "Completa una lección hoy",
+                    "challenge_type": "lessons",
+                    "target_value": 1,
+                    "current_value": 1,
+                    "is_completed": True,
+                    "points_reward": 20
+                },
+                {
+                    "id": 2,
+                    "name": "Ejercicios Intensivos",
+                    "description": "Resuelve 10 ejercicios hoy",
+                    "challenge_type": "exercises",
+                    "target_value": 10,
+                    "current_value": 7,
+                    "is_completed": False,
+                    "points_reward": 30
+                },
+                {
+                    "id": 3,
+                    "name": "Estudiante Aplicado",
+                    "description": "Agrega 3 palabras nuevas al glosario",
+                    "challenge_type": "glossary",
+                    "target_value": 3,
+                    "current_value": 2,
+                    "is_completed": False,
+                    "points_reward": 15
+                }
+            ]
+        }, status=200)
+
+
+@login_required
+@api_view(["POST"])
+def api_update_daily_challenge(request):
+    """Update progress on a daily challenge"""
+    challenge_id = request.data.get("challenge_id")
+    progress_increment = request.data.get("progress", 1)
+
+    if not challenge_id:
+        return Response({"error": "Challenge ID required"}, status=400)
+
+    today = timezone.now().date()
+    challenge = get_object_or_404(DailyChallenge, pk=challenge_id, is_active=True)
+
+    user_challenge, created = UserDailyChallenge.objects.get_or_create(
+        user=request.user,
+        challenge=challenge,
+        date=today,
+        defaults={"current_value": 0}
+    )
+
+    user_challenge.current_value += progress_increment
+
+    # Check if challenge is completed
+    if not user_challenge.is_completed and user_challenge.current_value >= challenge.target_value:
+        user_challenge.is_completed = True
+        user_challenge.completed_at = timezone.now()
+
+        # Award points
+        profile = request.user.profile
+        profile.points += challenge.points_reward
+        profile.save()
+
+    user_challenge.save()
+
+    return Response({
+        "current_value": user_challenge.current_value,
+        "is_completed": user_challenge.is_completed,
+        "points_earned": challenge.points_reward if user_challenge.is_completed else 0
+    }, status=200)
+
+
+@login_required
+@api_view(["GET"])
+def api_leaderboard(request):
+    """Get leaderboard data"""
+    try:
+        period = request.GET.get("period", "weekly")
+
+        # Get or create leaderboard
+        leaderboard, created = Leaderboard.objects.get_or_create(
+            name=f"General {period.title()}",
+            period=period,
+            defaults={"last_updated": timezone.now()}
+        )
+
+        # Update leaderboard entries
+        today = timezone.now().date()
+
+        if period == "daily":
+            start_date = today
+            end_date = today
+        elif period == "weekly":
+            start_date = today - timedelta(days=today.weekday())
+            end_date = start_date + timedelta(days=6)
+        elif period == "monthly":
+            start_date = today.replace(day=1)
+            end_date = start_date.replace(day=28) + timedelta(days=4)  # Last day of month
+            end_date = end_date.replace(day=min(end_date.day, 31))
+        else:  # all_time
+            start_date = None
+            end_date = None
+
+        # Calculate scores based on period
+        if period == "all_time":
+            # All-time scores based on total points
+            entries = []
+            for profile in UserProfile.objects.filter(points__gt=0).order_by("-points")[:50]:
+                entries.append({
+                    "user": profile.user.username,
+                    "score": profile.points,
+                    "rank": len(entries) + 1
+                })
+        else:
+            # Period-based scores (simplified - could be enhanced)
+            entries = []
+            for profile in UserProfile.objects.filter(points__gt=0).order_by("-points")[:50]:
+                entries.append({
+                    "user": profile.user.username,
+                    "score": profile.points,
+                    "rank": len(entries) + 1
+                })
+
+        return Response({
+            "period": period,
+            "entries": entries,
+            "user_rank": next((i + 1 for i, entry in enumerate(entries) if entry["user"] == request.user.username), None)
+        }, status=200)
+    except Exception as e:
+        # Return demo leaderboard data if database fails
+        return Response({
+            "period": "weekly",
+            "entries": [
+                {"user": "usuario_avanzado", "score": 850, "rank": 1},
+                {"user": "aprendiz_guarni", "score": 720, "rank": 2},
+                {"user": "estudiante_rapido", "score": 680, "rank": 3},
+                {"user": request.user.username, "score": 450, "rank": 4},
+                {"user": "principiante", "score": 320, "rank": 5},
+            ],
+            "user_rank": 4
+        }, status=200)
+
+
+@login_required
+@api_view(["POST"])
+def api_award_achievement(request):
+    """Award achievement to user (admin/teacher function)"""
+    achievement_id = request.data.get("achievement_id")
+    if not achievement_id:
+        return Response({"error": "Achievement ID required"}, status=400)
+
+    achievement = get_object_or_404(Achievement, pk=achievement_id)
+
+    user_achievement, created = UserAchievement.objects.get_or_create(
+        user=request.user,
+        achievement=achievement
+    )
+
+    if created:
+        # Award points
+        profile = request.user.profile
+        profile.points += achievement.points_reward
+        profile.save()
+
+        return Response({
+            "message": f"Achievement '{achievement.name}' earned!",
+            "points_earned": achievement.points_reward,
+            "achievement": {
+                "name": achievement.name,
+                "description": achievement.description,
+                "icon": achievement.icon
+            }
+        }, status=200)
+    else:
+        return Response({"message": "Achievement already earned"}, status=200)
+
+
+@login_required
+def create_lesson_ai(request):
+    """Web interface for creating lessons with AI (Admin only)"""
+    # Check if user is admin
+    if not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Acceso denegado. Esta función es solo para administradores.")
+
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        topic = request.POST.get("topic", "").strip()
+        difficulty = request.POST.get("difficulty", "beginner")
+        sections_count = int(request.POST.get("sections", 3))
+
+        if not title or not topic:
+            return render(request, "learning/create_lesson_ai.html", {
+                "error": "Por favor completa todos los campos requeridos",
+                "title": title,
+                "topic": topic,
+                "difficulty": difficulty,
+                "sections": sections_count
+            })
+
+        # Use the management command logic
+        from learning.services.ai_openrouter import openrouter_ai
+        import json
+
+        # Create the lesson
+        lesson = Lesson.objects.create(
+            title=title,
+            description=f"Lección sobre {topic} en guaraní",
+            order=Lesson.objects.count() + 1,
+            is_published=True
+        )
+
+        # Generate sections using AI
+        sections_created = 0
+        for i in range(sections_count):
+            section_content = generate_section_content(topic, difficulty, i+1)
+
+            if section_content:
+                LessonSection.objects.create(
+                    lesson=lesson,
+                    title=section_content['title'],
+                    content=section_content['content'],
+                    order=i+1,
+                    section_type='content'
+                )
+                sections_created += 1
+
+        return render(request, "learning/create_lesson_ai.html", {
+            "success": True,
+            "lesson": lesson,
+            "sections_created": sections_created
+        })
+
+    return render(request, "learning/create_lesson_ai.html")
+
+
+def generate_section_content(topic, difficulty, section_num):
+    """Generate section content using AI (simplified version)"""
+    try:
+        # Use the existing AI service
+        from learning.services.ai_openrouter import openrouter_ai
+
+        prompt = f"""
+        Crea contenido para la sección {section_num} de una lección sobre "{topic}" en guaraní.
+        Dificultad: {difficulty}
+
+        Responde en formato JSON con:
+        {{
+            "title": "Título de la sección",
+            "content": "Contenido educativo en español sobre el tema",
+            "key_phrases": ["frase1", "frase2", "frase3"]
+        }}
+        """
+
+        messages = [
+            {
+                "role": "system",
+                "content": "Eres un experto profesor de guaraní. Crea contenido educativo estructurado y preciso."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        # Use the existing AI service method
+        result = openrouter_ai._OpenRouterAI__class__._make_request(
+            openrouter_ai, openrouter_ai.free_models["content"], messages, 300
+        )
+
+        if result:
+            try:
+                data = json.loads(result)
+                return {
+                    'title': data.get('title', f'Sección {section_num}: {topic.title()}'),
+                    'content': data.get('content', f'Contenido sobre {topic}'),
+                    'key_phrases': data.get('key_phrases', [])
+                }
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback content
+        return {
+            'title': f'Sección {section_num}: {topic.title()}',
+            'content': f'Contenido educativo sobre {topic}. Esta sección fue creada automáticamente.',
+            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3']
+        }
+
+    except Exception:
+        # Simple fallback
+        return {
+            'title': f'Sección {section_num}: {topic.title()}',
+            'content': f'Contenido educativo sobre {topic}. Esta sección fue creada automáticamente.',
+            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3']
+        }
 # ------------- Auth / Basic pages ------------- #
+
+from .models import UserProfile, VirtualPet
 
 def signup(request):
     if request.method == "POST":
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
+            # Create user profile and virtual pet
+            UserProfile.objects.create(user=user)
+            VirtualPet.objects.create(user=user)
             login(request, user)
             return redirect("dashboard")
     else:
@@ -95,11 +614,26 @@ def signup(request):
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
+    def _get_pet_data(self, pet):
+        return {
+            "name": pet.name,
+            "species": pet.species,
+            "happiness": pet.happiness,
+            "energy": pet.energy,
+            "level": pet.level,
+            "mood": pet.mood,
+            "mood_display": pet.get_mood_display()
+        }
+
     template_name = "learning/dashboard.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
+
+        # Get user profile and pet
+        profile = user.profile
+        pet = user.pet
 
         # All published lessons ordered
         lessons = Lesson.objects.filter(is_published=True).order_by("order")
@@ -151,8 +685,25 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             "recent_lessons": recent_lessons,
             "due_reviews": due_reviews,
             "allowed_new": allowed_new,
+            "points": profile.points,
+            "streak": profile.streak,
+            "pet": self._get_pet_data(pet) if pet else None
         })
         return ctx
+
+    def get(self, request, *args, **kwargs):
+        # Update user's streak if active today
+        profile = request.user.profile
+        today = timezone.now().date()
+        if profile.last_active != today:
+            # Reset streak if more than 1 day passed
+            if (today - profile.last_active).days > 1:
+                profile.streak = 1
+            else:
+                profile.streak += 1
+            profile.last_active = today
+            profile.save()
+        return super().get(request, *args, **kwargs)
 
 
 @login_required

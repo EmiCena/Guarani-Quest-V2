@@ -94,3 +94,40 @@ REST_FRAMEWORK = {
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "")
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
 GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID", "")
+
+# OpenRouter AI config
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+SITE_URL = os.getenv("SITE_URL", "http://localhost:8000")
+
+# TTS Configuration for espeak-ng
+TTS_ESPEAK_CONFIG = {
+    "default": {
+        "speed": 155,
+        "pitch": 45,
+        "amplitude": 160,
+        "gap": 6,
+        "ensure_punct": True,
+    },
+    "lang_overrides": {
+        "gn": {
+            "speed": 140,
+            "pitch": 50,
+            "amplitude": 170,
+        },
+        "es": {
+            "speed": 160,
+            "pitch": 40,
+            "amplitude": 150,
+        }
+    },
+    "presets": {
+        "slow": {
+            "gn": {"speed": 120, "pitch": 55},
+            "es": {"speed": 130, "pitch": 45},
+        },
+        "fast": {
+            "gn": {"speed": 180, "pitch": 45},
+            "es": {"speed": 190, "pitch": 35},
+        }
+    }
+}

@@ -328,3 +328,333 @@ class GlossaryEntry(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.source_text_es} → {self.translated_text_gn}"
+
+
+# --- Gamification and Mascot Models ---
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    points = models.PositiveIntegerField(default=0)
+    streak = models.PositiveIntegerField(default=0)
+    last_active = models.DateField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+class Achievement(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    points_reward = models.PositiveIntegerField(default=50)
+    icon = models.CharField(max_length=50, default='🏆')
+    
+    def __str__(self):
+        return self.name
+
+class UserAchievement(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements')
+    achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE)
+    earned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('user', 'achievement')]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.achievement.name}"
+
+class DailyChallenge(models.Model):
+    CHALLENGE_TYPES = [
+        ('lessons', 'Completar lecciones'),
+        ('exercises', 'Resolver ejercicios'),
+        ('streak', 'Mantener racha'),
+        ('pronunciation', 'Practicar pronunciación'),
+        ('glossary', 'Agregar palabras al glosario'),
+    ]
+
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    challenge_type = models.CharField(max_length=20, choices=CHALLENGE_TYPES)
+    target_value = models.PositiveIntegerField(default=1)
+    points_reward = models.PositiveIntegerField(default=10)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_challenge_type_display()})"
+
+class UserDailyChallenge(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_challenges')
+    challenge = models.ForeignKey(DailyChallenge, on_delete=models.CASCADE)
+    date = models.DateField(auto_now_add=True)
+    current_value = models.PositiveIntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [('user', 'challenge', 'date')]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.challenge.name} - {self.date}"
+
+class Leaderboard(models.Model):
+    PERIOD_CHOICES = [
+        ('daily', 'Diario'),
+        ('weekly', 'Semanal'),
+        ('monthly', 'Mensual'),
+        ('all_time', 'Todo el tiempo'),
+    ]
+
+    name = models.CharField(max_length=100)
+    period = models.CharField(max_length=20, choices=PERIOD_CHOICES, default='weekly')
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_period_display()})"
+
+class LeaderboardEntry(models.Model):
+    leaderboard = models.ForeignKey(Leaderboard, on_delete=models.CASCADE, related_name='entries')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    score = models.PositiveIntegerField(default=0)
+    rank = models.PositiveIntegerField(default=0)
+    period_start = models.DateField()
+    period_end = models.DateField()
+
+    class Meta:
+        unique_together = [('leaderboard', 'user', 'period_start', 'period_end')]
+        ordering = ['-score', 'user__username']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.score} puntos"
+
+class VirtualPet(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='pet')
+    name = models.CharField(max_length=50, default='Karai')
+    species = models.CharField(max_length=50, default='Jaguareté')
+    happiness = models.PositiveSmallIntegerField(default=50)  # 0-100
+    energy = models.PositiveSmallIntegerField(default=70)     # 0-100
+    level = models.PositiveSmallIntegerField(default=1)
+    experience = models.PositiveIntegerField(default=0)      # XP for leveling up
+    last_interaction = models.DateTimeField(auto_now=True)
+    last_fed = models.DateTimeField(null=True, blank=True)
+    last_played = models.DateTimeField(null=True, blank=True)
+    last_cleaned = models.DateTimeField(null=True, blank=True)
+
+    MOOD_CHOICES = [
+        ('happy', 'Feliz'),
+        ('sad', 'Triste'),
+        ('tired', 'Cansado'),
+        ('hungry', 'Hambriento'),
+        ('bored', 'Aburrido'),
+        ('excited', 'Emocionado'),
+        ('sleepy', 'Somnoliento'),
+    ]
+    mood = models.CharField(max_length=20, choices=MOOD_CHOICES, default='happy')
+
+    PET_SPECIES = [
+        ('jaguarete', 'Jaguareté'),
+        ('tucán', 'Tucán'),
+        ('capibara', 'Capibara'),
+        ('mariposa', 'Mariposa'),
+        ('mono', 'Mono'),
+    ]
+    species = models.CharField(max_length=20, choices=PET_SPECIES, default='jaguarete')
+
+    def __str__(self):
+        return f"{self.name} ({self.species}) - {self.user.username}'s pet"
+
+    def update_mood(self):
+        """Update pet mood based on current stats and time since last interaction"""
+        now = timezone.now()
+
+        # Base mood on happiness and energy
+        if self.happiness >= 80 and self.energy >= 60:
+            if self.energy >= 80:
+                self.mood = 'excited'
+            else:
+                self.mood = 'happy'
+        elif self.happiness <= 30:
+            self.mood = 'sad'
+        elif self.energy <= 30:
+            self.mood = 'tired'
+        elif self.energy <= 20:
+            self.mood = 'sleepy'
+        else:
+            # Check if needs care
+            hours_since_fed = None
+            if self.last_fed:
+                hours_since_fed = (now - self.last_fed).total_seconds() / 3600
+
+            if hours_since_fed and hours_since_fed > 6:
+                self.mood = 'hungry'
+            else:
+                self.mood = 'bored'
+
+        self.save(update_fields=['mood'])
+
+    def feed(self, food_type='normal'):
+        """Feed the pet to increase happiness and energy"""
+        from random import randint
+
+        # Different food types give different benefits
+        multipliers = {
+            'normal': 1.0,
+            'treat': 1.5,
+            'deluxe': 2.0
+        }
+
+        multiplier = multipliers.get(food_type, 1.0)
+
+        happiness_gain = int(15 * multiplier)
+        energy_gain = int(10 * multiplier)
+
+        self.happiness = min(100, self.happiness + happiness_gain)
+        self.energy = min(100, self.energy + energy_gain)
+        self.last_fed = timezone.now()
+
+        # Give experience for caring
+        self.experience += int(5 * multiplier)
+
+        self.save()
+        self.update_mood()
+        self.check_level_up()
+
+        return {
+            'happiness_gain': happiness_gain,
+            'energy_gain': energy_gain,
+            'experience_gained': int(5 * multiplier)
+        }
+
+    def play(self, game_type='simple'):
+        """Play with the pet to increase happiness and gain experience"""
+        from random import randint
+
+        # Different games give different benefits
+        multipliers = {
+            'simple': 1.0,
+            'fun': 1.5,
+            'challenging': 2.0
+        }
+
+        multiplier = multipliers.get(game_type, 1.0)
+
+        happiness_gain = int(20 * multiplier)
+        energy_loss = int(15 * multiplier)
+        experience_gain = int(10 * multiplier)
+
+        self.happiness = min(100, self.happiness + happiness_gain)
+        self.energy = max(0, self.energy - energy_loss)
+        self.last_played = timezone.now()
+        self.experience += experience_gain
+
+        self.save()
+        self.update_mood()
+        self.check_level_up()
+
+        return {
+            'happiness_gain': happiness_gain,
+            'energy_loss': energy_loss,
+            'experience_gained': experience_gain
+        }
+
+    def clean(self):
+        """Clean the pet to increase happiness"""
+        happiness_gain = 10
+        self.happiness = min(100, self.happiness + happiness_gain)
+        self.last_cleaned = timezone.now()
+        self.experience += 3
+
+        self.save()
+        self.update_mood()
+        self.check_level_up()
+
+        return {
+            'happiness_gain': happiness_gain,
+            'experience_gained': 3
+        }
+
+    def check_level_up(self):
+        """Check if pet should level up based on experience"""
+        exp_needed = self.level * 100  # 100 XP per level
+
+        if self.experience >= exp_needed:
+            self.level += 1
+            self.experience = 0  # Reset XP for next level
+            self.save()
+            return True
+        return False
+
+    def get_status_summary(self):
+        """Get a summary of the pet's current status"""
+        return {
+            'name': self.name,
+            'species': self.get_species_display(),
+            'level': self.level,
+            'happiness': self.happiness,
+            'energy': self.energy,
+            'mood': self.get_mood_display(),
+            'experience': self.experience,
+            'experience_to_next': self.level * 100,
+            'last_interaction': self.last_interaction,
+            'needs_feeding': self._needs_feeding(),
+            'needs_playing': self._needs_playing(),
+            'is_tired': self.energy < 30,
+        }
+
+    def _needs_feeding(self):
+        """Check if pet needs feeding"""
+        if not self.last_fed:
+            return True
+
+        hours_since_fed = (timezone.now() - self.last_fed).total_seconds() / 3600
+        return hours_since_fed > 4  # Needs feeding every 4 hours
+
+    def _needs_playing(self):
+        """Check if pet needs playing"""
+        if not self.last_played:
+            return True
+
+        hours_since_played = (timezone.now() - self.last_played).total_seconds() / 3600
+        return hours_since_played > 6  # Needs playing every 6 hours
+
+    def get_random_message(self):
+        """Get a random message from the pet based on its mood"""
+        messages = {
+            'happy': [
+                f"¡{self.name} está muy feliz de verte!",
+                f"{self.name} ronronea contento mientras te saluda.",
+                f"¡{self.name} te mira con ojos brillantes de alegría!",
+            ],
+            'excited': [
+                f"¡{self.name} está súper emocionado!",
+                f"{self.name} salta de alegría al verte.",
+                f"¡{self.name} no cabe en sí de la emoción!",
+            ],
+            'sad': [
+                f"{self.name} parece un poco triste hoy.",
+                f"{self.name} necesita un poco de atención.",
+                f"{self.name} te mira con ojos suplicantes.",
+            ],
+            'hungry': [
+                f"{self.name} tiene hambre y te mira expectante.",
+                f"{self.name} olfatea el aire buscando comida.",
+                f"¡{self.name} quiere un bocadillo!",
+            ],
+            'tired': [
+                f"{self.name} bosteza y parece cansado.",
+                f"{self.name} se acurruca buscando descanso.",
+                f"{self.name} necesita una siesta.",
+            ],
+            'bored': [
+                f"{self.name} parece aburrido y busca diversión.",
+                f"{self.name} te mira esperando que juegues con él.",
+                f"¡{self.name} quiere jugar!",
+            ],
+            'sleepy': [
+                f"{self.name} tiene mucho sueño.",
+                f"{self.name} se frota los ojos somnoliento.",
+                f"{self.name} necesita dormir un poco.",
+            ],
+        }
+
+        import random
+        mood_messages = messages.get(self.mood, messages['happy'])
+        return random.choice(mood_messages)
