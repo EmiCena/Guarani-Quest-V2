@@ -6,72 +6,61 @@
     <p class="lead">Practica y refuerza tus conocimientos de guaraní con una variedad de actividades. ¡Elige una y comienza!</p>
   </section>
 
-  <!-- Bento Grid -->
-  <section class="bento-grid">
-    <!-- Arrastrar y Soltar -->
-    <div class="bento-card col-span-6">
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div class="bento-icon">↔</div>
-        <div>
-          <h3 class="bento-title">Arrastrar y Soltar</h3>
-          <p class="bento-desc">Conecta palabras y frases para formar oraciones correctas.</p>
-        </div>
-      </div>
-      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
-    </div>
+  <!-- Exercise Types Grid -->
+  <section class="exercise-grid">
+
 
     <!-- Completar Espacios -->
-    <div class="bento-card col-span-6">
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div class="bento-icon">▢</div>
-        <div>
-          <h3 class="bento-title">Completar Espacios</h3>
-          <p class="bento-desc">Rellena los espacios en blanco con las palabras correctas.</p>
-        </div>
-      </div>
-      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
+    <div class="exercise-card" onclick="window.location.href='/learning/exercises/fill-blank/'">
+      <div class="exercise-icon">□</div>
+      <h3 class="exercise-title">Completar Espacios</h3>
+      <p class="exercise-description">Rellena los espacios en blanco con las palabras correctas.</p>
+    </div>
+
+    <!-- Chatbot Guaraní -->
+    <div class="exercise-card" onclick="window.location.href='/learning/chatbot/'">
+      <div class="exercise-icon">💬</div>
+      <h3 class="exercise-title">Chatbot Guaraní</h3>
+      <p class="exercise-description">Practica guaraní conversando con un profesor virtual.</p>
     </div>
 
     <!-- Escucha y Responde -->
-    <div class="bento-card col-span-6">
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div class="bento-icon">🔊</div>
-        <div>
-          <h3 class="bento-title">Escucha y Responde</h3>
-          <p class="bento-desc">Escucha una frase y selecciona la respuesta correcta.</p>
-        </div>
-      </div>
-      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
+    <div class="exercise-card">
+      <div class="exercise-icon">🔊</div>
+      <h3 class="exercise-title">Escucha y Responde</h3>
+      <p class="exercise-description">Escucha una frase y selecciona la respuesta correcta.</p>
+      <button class="exercise-btn">Abrir</button>
     </div>
 
     <!-- Traducción -->
-    <div class="bento-card col-span-6">
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div class="bento-icon">⇄</div>
-        <div>
-          <h3 class="bento-title">Traducción</h3>
-          <p class="bento-desc">Traduce frases del español al guaraní y viceversa.</p>
-        </div>
-      </div>
-      <a class="qx-btn qx-outline bento-cta" href="{% url 'lessons_overview' %}">Abrir</a>
+    <div class="exercise-card">
+      <div class="exercise-icon">↔</div>
+      <h3 class="exercise-title">Traducción</h3>
+      <p class="exercise-description">Traduce frases del español al guaraní y viceversa.</p>
+      <button class="exercise-btn">Abrir</button>
     </div>
+  </section>
 
-    <!-- Pronunciación: tile protagonista, ocupa ancho completo en desktop -->
-    <div class="bento-card bento-accent col-span-12 row-span-2">
-      <div style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-        <div style="display:flex;gap:12px;align-items:center;">
-          <div class="bento-icon">🎤</div>
-          <div>
-            <h3 class="bento-title">Pronunciación</h3>
-            <p class="bento-desc">Practica la pronunciación de palabras y frases en guaraní con tu micrófono.</p>
-          </div>
+  <!-- Featured Exercise Section -->
+  <section class="featured-exercise">
+    <div class="featured-card">
+      <div class="featured-content">
+        <div class="featured-icon">🎤</div>
+        <div class="featured-text">
+          <h3>Pronunciación</h3>
+          <p>Practica la pronunciación de palabras y frases en guaraní con tu micrófono.</p>
         </div>
-        <a class="qx-btn" href="{% url 'lessons_overview' %}">Empezar</a>
+        <button class="featured-btn">Empezar</button>
       </div>
-      <div style="margin-top:10px;border-radius:12px;height:120px;background:
-          linear-gradient(90deg, rgba(134,239,172,.35), rgba(34,197,94,.15)),
-          repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0 2px, transparent 2px 22px);
-          border:1px solid #bbf7d0;"></div>
+      <div class="featured-visual">
+        <div class="waveform-lines">
+          <div class="wave-line"></div>
+          <div class="wave-line"></div>
+          <div class="wave-line"></div>
+          <div class="wave-line"></div>
+          <div class="wave-line"></div>
+        </div>
+      </div>
     </div>
   </section>
 

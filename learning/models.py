@@ -135,12 +135,165 @@ class GlossaryEntry(models.Model):
     translated_text_gn = models.CharField(max_length=255)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Enhanced fields for better organization
+    category = models.CharField(max_length=50, blank=True, default='general')  # saludo, familia, escuela, etc.
+    difficulty = models.CharField(max_length=20, choices=[
+        ('beginner', 'Principiante'),
+        ('intermediate', 'Intermedio'),
+        ('advanced', 'Avanzado')
+    ], default='beginner')
+    tags = models.JSONField(default=list, blank=True)  # ['importante', 'frecuente', 'formal']
+    usage_examples = models.JSONField(default=list, blank=True)  # ['Che hai Juan', 'Mba'éichapa María']
+    is_favorite = models.BooleanField(default=False)
+    is_public = models.BooleanField(default=False)  # Para compartir palabras
+
+    # Study and progress tracking
+    last_reviewed = models.DateTimeField(null=True, blank=True)
+    review_count = models.PositiveIntegerField(default=0)
+    mastery_level = models.FloatField(default=0.0)  # 0-100 scale for better granularity
+    study_streak = models.PositiveIntegerField(default=0)  # Racha de estudio para esta palabra
+    next_review_date = models.DateTimeField(null=True, blank=True)  # Próxima fecha de revisión SRS
+
+    # Statistics and analytics
+    total_study_time = models.PositiveIntegerField(default=0)  # Tiempo total de estudio en segundos
+    correct_attempts = models.PositiveIntegerField(default=0)
+    incorrect_attempts = models.PositiveIntegerField(default=0)
+    average_response_time = models.FloatField(default=0.0)  # Tiempo promedio de respuesta en segundos
+
+    # Audio and pronunciation
+    audio_pronunciation = models.FileField(upload_to="glossary_audio/", blank=True, null=True)
+    pronunciation_quality = models.FloatField(default=0.0)  # Calidad de pronunciación 0-1
+    pronunciation_attempts = models.PositiveIntegerField(default=0)
+
+    # Source and metadata
+    source = models.CharField(max_length=100, blank=True)  # Fuente de la palabra (manual, AI, import, etc.)
+    is_verified = models.BooleanField(default=False)  # Verificado por expertos
+
+    # Study reminders and scheduling
+    reminder_enabled = models.BooleanField(default=True)
+    reminder_frequency = models.CharField(max_length=20, choices=[
+        ('daily', 'Diario'),
+        ('every_3_days', 'Cada 3 días'),
+        ('weekly', 'Semanal'),
+        ('monthly', 'Mensual'),
+        ('custom', 'Personalizado')
+    ], default='every_3_days')
+    custom_reminder_days = models.PositiveIntegerField(default=3)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-is_favorite", "-last_reviewed", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "category"]),
+            models.Index(fields=["user", "difficulty"]),
+            models.Index(fields=["user", "is_favorite"]),
+            models.Index(fields=["user", "next_review_date"]),
+            models.Index(fields=["is_public", "is_verified"]),
+        ]
 
     def __str__(self):
         return f"{self.user} - {self.source_text_es} → {self.translated_text_gn}"
+
+    def save(self, *args, **kwargs):
+        if not self.share_token and self.is_public:
+            # Generate unique share token
+            import secrets
+            self.share_token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
+
+    def get_category_display(self):
+        categories = {
+            'saludo': 'Saludos',
+            'familia': 'Familia',
+            'escuela': 'Escuela',
+            'comida': 'Comida',
+            'lugares': 'Lugares',
+            'numeros': 'Números',
+            'colores': 'Colores',
+            'general': 'General'
+        }
+        return categories.get(self.category, self.category.title())
+
+    def get_difficulty_display(self):
+        difficulties = {
+            'beginner': 'Principiante',
+            'intermediate': 'Intermedio',
+            'advanced': 'Avanzado'
+        }
+        return difficulties.get(self.difficulty, self.difficulty.title())
+
+    def update_mastery(self, correct=True, response_time=0.0):
+        """Update mastery level based on performance"""
+        if correct:
+            self.correct_attempts += 1
+            # Increase mastery based on current level and performance
+            if self.mastery_level < 50:
+                self.mastery_level = min(100, self.mastery_level + 15)
+            elif self.mastery_level < 80:
+                self.mastery_level = min(100, self.mastery_level + 10)
+            else:
+                self.mastery_level = min(100, self.mastery_level + 5)
+        else:
+            self.incorrect_attempts += 1
+            # Decrease mastery but not too drastically
+            self.mastery_level = max(0, self.mastery_level - 8)
+
+        # Update average response time
+        if response_time > 0:
+            if self.average_response_time == 0:
+                self.average_response_time = response_time
+            else:
+                self.average_response_time = (self.average_response_time + response_time) / 2
+
+        self.last_reviewed = timezone.now()
+        self.review_count += 1
+        self.save(update_fields=['mastery_level', 'last_reviewed', 'review_count',
+                                'correct_attempts', 'incorrect_attempts', 'average_response_time'])
+
+    def get_next_review_date(self):
+        """Calculate next review date using SRS algorithm"""
+        if not self.last_reviewed:
+            return timezone.now()
+
+        # Simple SRS: increase interval based on mastery and ease factor
+        base_interval = self.interval_days or 1
+
+        if self.mastery_level >= 90:
+            interval = base_interval * self.ease_factor * 3
+        elif self.mastery_level >= 70:
+            interval = base_interval * self.ease_factor * 2
+        elif self.mastery_level >= 50:
+            interval = base_interval * self.ease_factor * 1.5
+        else:
+            interval = max(1, base_interval * 0.8)  # Reduce interval for struggling words
+
+        next_date = self.last_reviewed + timezone.timedelta(days=int(interval))
+        return next_date
+
+    def should_review_today(self):
+        """Check if this word should be reviewed today"""
+        if not self.next_review_date:
+            return True
+        return timezone.now().date() >= self.next_review_date.date()
+
+    def get_study_stats(self):
+        """Get comprehensive study statistics"""
+        total_attempts = self.correct_attempts + self.incorrect_attempts
+        accuracy = (self.correct_attempts / total_attempts * 100) if total_attempts > 0 else 0
+
+        return {
+            'total_attempts': total_attempts,
+            'correct_attempts': self.correct_attempts,
+            'incorrect_attempts': self.incorrect_attempts,
+            'accuracy': round(accuracy, 1),
+            'mastery_level': self.mastery_level,
+            'study_streak': self.study_streak,
+            'average_response_time': round(self.average_response_time, 2),
+            'days_since_last_review': (timezone.now().date() - self.last_reviewed.date()).days if self.last_reviewed else None,
+            'next_review_date': self.get_next_review_date(),
+            'should_review_today': self.should_review_today()
+        }
 
 
 # ---------- User results / progress ----------
@@ -314,20 +467,7 @@ class TranslationExercise(models.Model):
     def __str__(self):
         return f"Translation #{self.id} - L{self.lesson_id}"
 
-# learning/models.py (solo la clase; el resto de tu archivo no cambia)
-class GlossaryEntry(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="glossary_entries")
-    source_text_es = models.CharField(max_length=255)
-    translated_text_gn = models.CharField(max_length=255)
-    notes = models.TextField(blank=True)
-    audio_pronunciation = models.FileField(upload_to="glossary_audio/", blank=True, null=True)  # nuevo
-    created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"{self.user} - {self.source_text_es} → {self.translated_text_gn}"
 
 
 # --- Gamification and Mascot Models ---

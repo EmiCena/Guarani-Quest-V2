@@ -23,12 +23,16 @@ urlpatterns = [
     path("api/srs/grade/", views.api_srs_grade, name="api_srs_grade"),
 
     path("api/glossary/bulk-add/", views.api_glossary_bulk_add, name="api_glossary_bulk_add"),
+    path("api/glossary/<int:entry_id>/favorite/", views.api_glossary_toggle_favorite, name="api_glossary_toggle_favorite"),
+    path("api/glossary/add-enhanced/", views.api_add_enhanced_glossary_entry, name="api_add_enhanced_glossary_entry"),
 
     # SRS state/mode
 path("api/srs/state/", views.api_srs_state, name="api_srs_state"),
 path("api/srs/set-mode/", views.api_srs_set_mode, name="api_srs_set_mode"),
 
     path("exercises/", views.exercises_view, name="exercises"),
+    path("exercises/fill-blank/", views.fill_blank_exercise, name="fill_blank_exercise"),
+    path("chatbot/", views.chatbot_view, name="chatbot"),
     path("lessons/", views.lessons_overview, name="lessons_overview"),
     
     path("api/exercises/dragdrop/", views.api_submit_dragdrop, name="api_submit_dragdrop"),
@@ -42,6 +46,8 @@ path("api/tts/", views.tts_view, name="tts"),
 path("api/ai-translate/", views.api_ai_translate, name="api_ai_translate"),
 path("api/ai-pronunciation-analysis/", views.api_ai_pronunciation_analysis, name="api_ai_pronunciation_analysis"),
 path("api/ai-generate-exercise/", views.api_ai_generate_exercise, name="api_ai_generate_exercise"),
+    path("api/ai-generate-drag-drop/", views.api_ai_generate_drag_drop_exercise, name="api_ai_generate_drag_drop_exercise"),
+    path("api/chatbot/", views.api_chatbot, name="api_chatbot"),
 
 # Enhanced Gamification APIs
 path("api/user-profile/", views.api_user_profile, name="api_user_profile"),

@@ -32,7 +32,9 @@
         <span class="qx-logo">▲</span>
         <span>Guaraní Quest</span>
       </a>
-      <nav class="qx-menu">
+
+      <!-- Desktop Navigation Menu -->
+      <nav class="qx-menu desktop-menu">
         <a href="{% url 'dashboard' %}" data-match="/">Inicio</a>
         <a href="{% url 'lessons_overview' %}">Lecciones</a>
         <a href="{% url 'exercises' %}">Ejercicios</a>
@@ -41,6 +43,7 @@
           <a href="{% url 'create_lesson_ai' %}">🤖 Crear con IA</a>
         {% endif %}
       </nav>
+
       <div class="qx-actions">
         <!-- Gamification Elements -->
         {% if user.is_authenticated %}
@@ -81,9 +84,79 @@
           <a class="qx-btn" href="{% url 'login' %}">Inicia Sesión</a>
         {% endif %}
       </div>
-      <button class="qx-burger" onclick="window.qxToggleMenu()">☰</button>
+      <button class="qx-burger" onclick="toggleSidebar()" title="Menú">☰</button>
     </div>
   </header>
+
+  <!-- Sliding Sidebar -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <a class="qx-brand sidebar-brand" href="{% url 'dashboard' %}">
+        <span class="qx-logo">▲</span>
+        <span>Guaraní Quest</span>
+      </a>
+      <button class="sidebar-close" onclick="closeSidebar()" title="Cerrar menú">×</button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'dashboard' %}" class="sidebar-link" data-match="/">
+        <span class="sidebar-icon">🏠</span>
+        <span class="sidebar-text">Inicio</span>
+      </a>
+      <a href="{% url 'lessons_overview' %}" class="sidebar-link">
+        <span class="sidebar-icon">📚</span>
+        <span class="sidebar-text">Lecciones</span>
+      </a>
+      <a href="{% url 'exercises' %}" class="sidebar-link">
+        <span class="sidebar-icon">✏️</span>
+        <span class="sidebar-text">Ejercicios</span>
+      </a>
+      <a href="{% url 'glossary' %}" class="sidebar-link">
+        <span class="sidebar-icon">📖</span>
+        <span class="sidebar-text">Glosario</span>
+      </a>
+      {% if user.is_staff %}
+        <a href="{% url 'create_lesson_ai' %}" class="sidebar-link">
+          <span class="sidebar-icon">🤖</span>
+          <span class="sidebar-text">Crear con IA</span>
+        </a>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      {% if user.is_authenticated %}
+        <div class="sidebar-user-info">
+          <div class="user-avatar">
+            <span class="avatar-icon">👤</span>
+          </div>
+          <div class="user-details">
+            <div class="user-name">{{ user.username }}</div>
+            <div class="user-stats">
+              <span class="user-points">{{ user.profile.points }} pts</span>
+              <span class="user-streak">{{ user.profile.streak }} días</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-actions">
+          <a href="/admin/" class="sidebar-action-btn">
+            <span class="sidebar-icon">⚙️</span>
+            <span>Admin</span>
+          </a>
+          <a href="{% url 'logout' %}" class="sidebar-action-btn">
+            <span class="sidebar-icon">🚪</span>
+            <span>Salir</span>
+          </a>
+        </div>
+      {% else %}
+        <div class="sidebar-auth">
+          <a href="{% url 'signup' %}" class="sidebar-btn primary">Regístrate</a>
+          <a href="{% url 'login' %}" class="sidebar-btn secondary">Inicia Sesión</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
 
   <!-- Page content -->
   <main class="qx-container" id="main">

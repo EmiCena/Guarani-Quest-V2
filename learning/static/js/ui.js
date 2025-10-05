@@ -1,17 +1,214 @@
 // Active menu highlight
 (function(){
   const path = location.pathname.replace(/\/+$/,'');
+
+  // Highlight desktop menu links
   document.querySelectorAll('.qx-menu a').forEach(a=>{
     const href=(a.getAttribute('href')||'').replace(/\/+$/,'');
     if(href && (path===href || path.startsWith(href+'/') || (href==='/' && path==='/'))) a.classList.add('active');
   });
+
+  // Highlight sidebar links
+  document.querySelectorAll('.sidebar-link').forEach(a=>{
+    const href=(a.getAttribute('href')||'').replace(/\/+$/,'');
+    if(href && (path===href || path.startsWith(href+'/') || (href==='/' && path==='/'))) a.classList.add('active');
+  });
+
+  // Setup sidebar functionality when DOM is ready
+  setupSidebarFunctionality();
 })();
 
-// Mobile menu toggle
+// Setup sidebar functionality
+function setupSidebarFunctionality() {
+  // Re-setup link handlers when navigating back/forward
+  window.addEventListener('popstate', function() {
+    setupSidebarLinkHandlers();
+  });
+
+  // Setup handlers for dynamically loaded content
+  document.addEventListener('DOMContentLoaded', function() {
+    setupSidebarLinkHandlers();
+  });
+
+  // Setup handlers after AJAX content loads
+  document.addEventListener('ajaxComplete', function() {
+    setupSidebarLinkHandlers();
+  });
+
+  // Close sidebar when window is resized to desktop size
+  window.addEventListener('resize', function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    // Close sidebar if window becomes wider than mobile breakpoint
+    if (window.innerWidth > 900) {
+      if (sidebar && sidebar.classList.contains('open')) {
+        closeSidebar();
+      }
+    }
+  });
+
+  // Initialize sidebar link handlers
+  setupSidebarLinkHandlers();
+}
+
+// Mobile menu toggle (legacy - keeping for backward compatibility)
 window.qxToggleMenu = function(){
   const r=document.documentElement;
   r.classList.toggle('qx-menu-open');
 };
+
+// Sidebar Functions
+window.toggleSidebar = function() {
+  try {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    if (!sidebar || !overlay) {
+      console.warn('Sidebar elements not found');
+      return;
+    }
+
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+
+    // Prevent body scroll when sidebar is open
+    document.body.style.overflow = 'hidden';
+
+    // Focus management for accessibility
+    const firstFocusableElement = sidebar.querySelector('a, button');
+    if (firstFocusableElement) {
+      firstFocusableElement.focus();
+    }
+
+    // Add click handlers for sidebar links to close sidebar when navigating
+    setupSidebarLinkHandlers();
+
+    console.log('Sidebar opened successfully');
+  } catch (error) {
+    console.error('Error toggling sidebar:', error);
+  }
+};
+
+window.closeSidebar = function() {
+  try {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    if (!sidebar || !overlay) {
+      console.warn('Sidebar elements not found');
+      return;
+    }
+
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+
+    // Return focus to the menu button
+    const burgerButton = document.querySelector('.qx-burger');
+    if (burgerButton) {
+      burgerButton.focus();
+    }
+
+    console.log('Sidebar closed successfully');
+  } catch (error) {
+    console.error('Error closing sidebar:', error);
+  }
+};
+
+// Setup click handlers for sidebar links
+function setupSidebarLinkHandlers() {
+  const sidebarLinks = document.querySelectorAll('.sidebar-link');
+  sidebarLinks.forEach(link => {
+    link.addEventListener('click', function() {
+      // Close sidebar after a short delay to allow navigation
+      setTimeout(() => {
+        closeSidebar();
+      }, 150);
+    });
+  });
+}
+
+// Setup exercise page functionality
+function setupExercisePage() {
+  // Setup exercise card click handlers
+  setupExerciseCardHandlers();
+
+  // Setup featured pronunciation section
+  setupPronunciationSection();
+}
+
+// Setup exercise card click handlers
+function setupExerciseCardHandlers() {
+  const exerciseCards = document.querySelectorAll('.exercise-card');
+  exerciseCards.forEach(card => {
+    const button = card.querySelector('.exercise-btn');
+    if (button) {
+      // Check if it's a link or button
+      if (button.tagName === 'A') {
+        // It's a link, let it navigate normally
+        return;
+      } else {
+        // It's a button, add click handler
+        button.addEventListener('click', function(e) {
+          e.preventDefault();
+          const exerciseTitle = card.querySelector('.exercise-title').textContent;
+          handleExerciseClick(exerciseTitle);
+        });
+      }
+    }
+  });
+}
+
+// Setup pronunciation section
+function setupPronunciationSection() {
+  const featuredBtn = document.querySelector('.featured-btn');
+  if (featuredBtn) {
+    featuredBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      handlePronunciationClick();
+    });
+  }
+}
+
+// Handle exercise clicks
+function handleExerciseClick(exerciseType) {
+  console.log(`Opening exercise: ${exerciseType}`);
+
+  // Show loading toast
+  showToast(`🔄 Cargando ${exerciseType}...`);
+
+  // Simulate loading and redirect to lessons (placeholder)
+  setTimeout(() => {
+    showToast(`✅ ${exerciseType} listo! Redirigiendo...`);
+    // For now, redirect to lessons overview
+    window.location.href = '/learning/lessons/';
+  }, 1000);
+}
+
+// Handle pronunciation exercise click
+function handlePronunciationClick() {
+  console.log('Opening pronunciation exercise');
+
+  // Show loading toast
+  showToast('🎤 Iniciando ejercicio de pronunciación...');
+
+  // Simulate loading and redirect to lessons (placeholder)
+  setTimeout(() => {
+    showToast('✅ ¡Ejercicio de pronunciación listo!');
+    // For now, redirect to lessons overview
+    window.location.href = '/learning/lessons/';
+  }, 1000);
+}
+
+// Initialize exercise page when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  if (document.querySelector('.exercise-grid')) {
+    setupExercisePage();
+  }
+});
 
 // Glossary search filter
 window.qxFilterGlossary = function(){
@@ -53,6 +250,30 @@ document.addEventListener('click', function(event) {
     document.querySelectorAll('.qx-dropdown').forEach(dropdown => {
       dropdown.classList.remove('show');
     });
+  }
+});
+
+// Keyboard support for sidebar
+document.addEventListener('keydown', function(event) {
+  const sidebar = document.getElementById('sidebar');
+  const isSidebarOpen = sidebar && sidebar.classList.contains('open');
+
+  // Close sidebar with Escape key
+  if (event.key === 'Escape' && isSidebarOpen) {
+    closeSidebar();
+  }
+
+  // Close sidebar with Enter/Space when focus is on close button
+  if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('sidebar-close')) {
+    event.preventDefault();
+    closeSidebar();
+  }
+});
+
+// Close sidebar when clicking on overlay
+document.addEventListener('click', function(event) {
+  if (event.target.id === 'sidebar-overlay') {
+    closeSidebar();
   }
 });
 

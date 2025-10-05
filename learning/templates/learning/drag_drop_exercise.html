@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="drag-drop-container">
+  <div class="exercise-header">
+    <h1>🠐 Arrastrar y Soltar</h1>
+    <p class="exercise-subtitle">Conecta palabras y frases para formar oraciones correctas en guaraní</p>
+    <button class="ai-generate-btn" onclick="generateNewExercise()">
+      🤖 Generar nuevo ejercicio con IA
+    </button>
+  </div>
+
+  <div class="exercises-list">
+    {% for exercise in exercises %}
+    <div class="exercise-item" data-exercise-id="{{ exercise.id }}">
+      <div class="exercise-content">
+        <div class="exercise-instruction">
+          <h3>{{ exercise.prompt_text }}</h3>
+        </div>
+
+        <div class="exercise-area">
+          <div class="scrambled-words">
+            <div class="words-label">Palabras disponibles:</div>
+            {% for token in exercise.correct_tokens %}
+            <div class="word-token" draggable="true" data-token="{{ token }}" ondragstart="dragStart(event)">
+              {{ token }}
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="drop-zone">
+            <div class="drop-instruction">Arrastra las palabras aquí en el orden correcto</div>
+            <div class="dropped-words" data-exercise-id="{{ exercise.id }}">
+              <!-- Las palabras ordenadas aparecerán aquí -->
+            </div>
+          </div>
+        </div>
+
+        <div class="exercise-actions">
+          <button class="btn-reset" onclick="resetExercise({{ exercise.id }})">
+            🔄 Reiniciar
+          </button>
+          <button class="btn-check" onclick="checkExercise({{ exercise.id }})">
+            ✅ Verificar
+          </button>
+        </div>
+
+        <div class="exercise-feedback" id="feedback-{{ exercise.id }}" style="display: none;">
+          <!-- El feedback aparecerá aquí -->
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="exercise-footer">
+    <a href="{% url 'exercises' %}" class="btn-back">
+      ← Volver a Ejercicios
+    </a>
+  </div>
+</div>
+
+<script>
+// Simple drag and drop implementation
+let draggedElement = null;
+
+function dragStart(event) {
+  draggedElement = event.target;
+  event.target.classList.add('dragging');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', event.target.textContent);
+}
+
+function dragEnd(event) {
+  event.target.classList.remove('dragging');
+}
+
+function allowDrop(event) {
+  event.preventDefault();
+  event.target.classList.add('drag-over');
+}
+
+function dragLeave(event) {
+  event.target.classList.remove('drag-over');
+}
+
+function drop(event) {
+  event.preventDefault();
+  event.target.classList.remove('drag-over');
+
+  const dropZone = event.target.closest('.drop-slot');
+  if (dropZone && !dropZone.classList.contains('occupied')) {
+    // Move the word to the slot
+    const wordText = event.dataTransfer.getData('text/plain');
+
+    // Hide the original word
+    if (draggedElement) {
+      draggedElement.style.display = 'none';
+    }
+
+    // Create word in slot
+    const wordElement = document.createElement('div');
+    wordElement.className = 'word-token placed';
+    wordElement.textContent = wordText;
+    wordElement.draggable = true;
+    wordElement.ondragstart = dragStart;
+    wordElement.ondragend = dragEnd;
+
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-word';
+    removeBtn.innerHTML = '×';
+    removeBtn.onclick = function() {
+      // Find and show the original word
+      const exerciseElement = dropZone.closest('[data-exercise-id]');
+      const originalWord = exerciseElement.querySelector(`.word-token[data-token="${wordText}"]:not(.placed)`);
+      if (originalWord) {
+        originalWord.style.display = 'inline-block';
+      }
+
+      // Clear slot
+      dropZone.innerHTML = '';
+      dropZone.classList.remove('occupied');
+      const placeholder = document.createElement('div');
+      placeholder.className = 'slot-placeholder';
+      placeholder.textContent = dropZone.dataset.index + 1;
+      dropZone.appendChild(placeholder);
+      updateDropInstruction();
+    };
+
+    wordElement.appendChild(removeBtn);
+
+    // Clear slot and add word
+    dropZone.innerHTML = '';
+    dropZone.classList.add('occupied');
+    dropZone.appendChild(wordElement);
+
+    // Update instruction text
+    updateDropInstruction();
+  }
+}
+
+function updateDropInstruction() {
+  const dropSlots = document.querySelectorAll('.drop-slot.occupied');
+  const placedWords = Array.from(dropSlots).map(slot => {
+    const wordElement = slot.querySelector('.word-token.placed');
+    return wordElement ? wordElement.textContent.trim() : '';
+  }).filter(word => word !== '');
+
+  const instruction = document.querySelector('.drop-instruction');
+  if (placedWords.length > 0) {
+    instruction.textContent = placedWords.join(' ');
+  } else {
+    instruction.textContent = 'Arrastra las palabras aquí en el orden correcto';
+  }
+}
+
+// Initialize drop zones when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+  {% for exercise in exercises %}
+    createDropZones({{ exercise.id }}, {{ exercise.correct_tokens|safe }});
+  {% endfor %}
+});
+
+function createDropZones(exerciseId, correctTokens) {
+  const container = document.querySelector(`[data-exercise-id="${exerciseId}"] .dropped-words`);
+  if (!container) return;
+
+  // Clear existing drop zones
+  container.innerHTML = '';
+
+  // Create drop zones for each position
+  correctTokens.forEach((token, index) => {
+    const dropZone = document.createElement('div');
+    dropZone.className = 'drop-slot';
+    dropZone.dataset.index = index;
+    dropZone.dataset.exerciseId = exerciseId;
+
+    // Add event handlers
+    dropZone.ondragover = (e) => {
+      e.preventDefault();
+      if (!dropZone.classList.contains('occupied')) {
+        dropZone.classList.add('drag-over');
+      }
+    };
+
+    dropZone.ondragleave = (e) => {
+      dropZone.classList.remove('drag-over');
+    };
+
+    dropZone.ondrop = (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+
+      if (!dropZone.classList.contains('occupied')) {
+        const wordText = e.dataTransfer.getData('text/plain');
+
+        // Hide the original word
+        if (draggedElement) {
+          draggedElement.style.display = 'none';
+        }
+
+        // Create word in slot
+        const wordElement = document.createElement('div');
+        wordElement.className = 'word-token placed';
+        wordElement.textContent = wordText;
+        wordElement.draggable = true;
+        wordElement.ondragstart = dragStart;
+        wordElement.ondragend = dragEnd;
+
+        // Add remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-word';
+        removeBtn.innerHTML = '×';
+        removeBtn.onclick = function() {
+          // Find and show the original word
+          const exerciseElement = dropZone.closest('[data-exercise-id]');
+          const originalWord = exerciseElement.querySelector(`.word-token[data-token="${wordText}"]:not(.placed)`);
+          if (originalWord) {
+            originalWord.style.display = 'inline-block';
+          }
+
+          // Clear slot
+          dropZone.innerHTML = '';
+          dropZone.classList.remove('occupied');
+          const placeholder = document.createElement('div');
+          placeholder.className = 'slot-placeholder';
+          placeholder.textContent = dropZone.dataset.index + 1;
+          dropZone.appendChild(placeholder);
+          updateDropInstruction();
+        };
+
+        wordElement.appendChild(removeBtn);
+
+        // Clear slot and add word
+        dropZone.innerHTML = '';
+        dropZone.classList.add('occupied');
+        dropZone.appendChild(wordElement);
+
+        // Update instruction text
+        updateDropInstruction();
+      }
+    };
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'slot-placeholder';
+    placeholder.textContent = `${index + 1}`;
+
+    dropZone.appendChild(placeholder);
+    container.appendChild(dropZone);
+  });
+}
+
+// Función para generar nuevo ejercicio con IA
+async function generateNewExercise() {
+  const button = document.querySelector('.ai-generate-btn');
+  const originalText = button.textContent;
+
+  // Mostrar estado de carga
+  button.textContent = '⏳ Generando ejercicio...';
+  button.disabled = true;
+
+  try {
+    const response = await fetch('/learning/api/ai-generate-drag-drop/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+      },
+      body: JSON.stringify({
+        topic: 'saludos y presentaciones',
+        difficulty: 'beginner',
+        word_count: 4
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      // Recargar la página para mostrar el nuevo ejercicio
+      location.reload();
+    } else {
+      throw new Error(result.error || 'Error generando ejercicio');
+    }
+  } catch (error) {
+    console.error('Error generating exercise:', error);
+    button.textContent = '❌ Error - Reintentar';
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 2000);
+  }
+}
+
+// Exercise control functions
+function resetExercise(exerciseId) {
+  const container = document.querySelector(`[data-exercise-id="${exerciseId}"] .dropped-words`);
+  if (!container) return;
+
+  // Show all original words
+  const exerciseElement = document.querySelector(`[data-exercise-id="${exerciseId}"]`);
+  const scrambledWords = exerciseElement.querySelectorAll('.word-token:not(.placed)');
+  scrambledWords.forEach(word => {
+    word.style.display = 'inline-block';
+  });
+
+  // Clear all drop slots
+  const dropSlots = container.querySelectorAll('.drop-slot');
+  dropSlots.forEach(slot => {
+    slot.innerHTML = '';
+    slot.classList.remove('occupied', 'correct', 'incorrect');
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'slot-placeholder';
+    placeholder.textContent = slot.dataset.index + 1;
+    slot.appendChild(placeholder);
+  });
+
+  // Reset instruction
+  const instruction = exerciseElement.querySelector('.drop-instruction');
+  instruction.textContent = 'Arrastra las palabras aquí en el orden correcto';
+
+  // Hide feedback
+  const feedback = document.getElementById(`feedback-${exerciseId}`);
+  if (feedback) {
+    feedback.style.display = 'none';
+  }
+}
+
+function checkExercise(exerciseId) {
+  const container = document.querySelector(`[data-exercise-id="${exerciseId}"] .dropped-words`);
+  if (!container) return;
+
+  const dropSlots = container.querySelectorAll('.drop-slot');
+  const placedWords = [];
+
+  // Get all placed words
+  dropSlots.forEach((slot, index) => {
+    const wordElement = slot.querySelector('.word-token.placed');
+    if (wordElement) {
+      placedWords.push({
+        word: wordElement.textContent.trim(),
+        slot: slot,
+        index: index
+      });
+    }
+  });
+
+  // Check if complete
+  if (placedWords.length !== dropSlots.length) {
+    showFeedback(exerciseId, 'incomplete', 'Completa todas las posiciones antes de verificar.');
+    return;
+  }
+
+  // Get the correct order from the exercise data
+  // For demo purposes, define the correct order for each exercise
+  const correctOrders = {
+    {% for exercise in exercises %}
+      {{ exercise.id }}: {{ exercise.correct_tokens|safe }},
+    {% endfor %}
+  };
+
+  const correctTokens = correctOrders[exerciseId] || [];
+
+  let correctCount = 0;
+  placedWords.forEach((item, index) => {
+    const isCorrect = item.word.toLowerCase() === correctTokens[index].toLowerCase();
+    if (isCorrect) correctCount++;
+
+    // Mark slot visually
+    item.slot.classList.add(isCorrect ? 'correct' : 'incorrect');
+  });
+
+  const score = (correctCount / correctTokens.length) * 100;
+
+  if (score >= 95) {
+    showFeedback(exerciseId, 'success', `¡Excelente! Has ordenado correctamente: "${placedWords.map(w => w.word).join(' ')}"`);
+  } else if (score >= 70) {
+    showFeedback(exerciseId, 'partial', `Bien hecho. ${correctCount} de ${correctTokens.length} palabras están correctas.`);
+  } else {
+    showFeedback(exerciseId, 'error', 'Revisa el orden de las palabras. ¡Puedes intentarlo de nuevo!');
+  }
+}
+
+function showFeedback(exerciseId, type, message) {
+  const feedback = document.getElementById(`feedback-${exerciseId}`);
+  if (!feedback) return;
+
+  feedback.style.display = 'block';
+  feedback.className = `exercise-feedback ${type}`;
+
+  let icon = '';
+  switch (type) {
+    case 'success': icon = '🎉'; break;
+    case 'partial': icon = '👍'; break;
+    case 'error': icon = '💪'; break;
+    case 'incomplete': icon = '📝'; break;
+  }
+
+  feedback.innerHTML = `
+    <div class="feedback-content">
+      <span class="feedback-icon">${icon}</span>
+      <span class="feedback-message">${message}</span>
+    </div>
+  `;
+}
+
+// Initialize functions when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+  // Functions are already initialized above
+});
+</script>
+
+{% endblock %}

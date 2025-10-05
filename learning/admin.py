@@ -23,11 +23,15 @@ class PronunInline(admin.TabularInline):
     model = PronunciationExercise
     extra = 1
 
+class DragDropInline(admin.TabularInline):
+    model = DragDropExercise
+    extra = 0
+
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
     list_display = ("title", "order", "is_published")
     list_editable = ("order", "is_published")
-    inlines = [LessonSectionInline, FillBlankInline, MCQInline, PronunInline]
+    inlines = [LessonSectionInline, FillBlankInline, MCQInline, PronunInline, DragDropInline]
 
 class MatchingPairInline(admin.TabularInline):
     model = MatchingPair
@@ -40,8 +44,21 @@ class MatchingExerciseAdmin(admin.ModelAdmin):
 
 @admin.register(FillBlankExercise)
 class FillBlankExerciseAdmin(admin.ModelAdmin):
-    list_display = ("id", "lesson", "order", "correct_answer")
-    list_editable = ("order",)
+    list_display = ("id", "lesson", "order", "prompt_text", "correct_answer")
+    list_editable = ("order", "prompt_text", "correct_answer")
+    list_filter = ("lesson",)
+    search_fields = ("prompt_text", "correct_answer")
+    ordering = ("lesson", "order")
+
+    fieldsets = (
+        ("Información Básica", {
+            "fields": ("lesson", "order", "prompt_text", "correct_answer")
+        }),
+        ("Configuración", {
+            "fields": (),
+            "classes": ("collapse",)
+        })
+    )
 
 @admin.register(MultipleChoiceExercise)
 class MultipleChoiceExerciseAdmin(admin.ModelAdmin):
@@ -79,21 +96,25 @@ class UserLessonProgressAdmin(admin.ModelAdmin):
     list_display = ("user", "lesson", "written_score", "pronunciation_confidence", "progress_percent", "completed", "updated_at")
     list_filter = ("user", "lesson", "completed")
 
-class DragDropInline(admin.TabularInline):
-    model = DragDropExercise
-    extra = 0
 
-class ListeningInline(admin.TabularInline):
-    model = ListeningExercise
-    extra = 0
-
-class TranslationInline(admin.TabularInline):
-    model = TranslationExercise
-    extra = 0
 
 @admin.register(DragDropExercise)
 class DragDropAdmin(admin.ModelAdmin):
-    list_display = ("id","lesson","order")
+    list_display = ("id", "lesson", "order", "prompt_text")
+    list_editable = ("order", "prompt_text")
+    list_filter = ("lesson",)
+    search_fields = ("prompt_text",)
+    ordering = ("lesson", "order")
+
+    fieldsets = (
+        ("Información Básica", {
+            "fields": ("lesson", "order", "prompt_text")
+        }),
+        ("Palabras para ordenar", {
+            "fields": ("correct_tokens",),
+            "description": "Lista de palabras en orden correcto, separadas por comas"
+        })
+    )
 
 @admin.register(ListeningExercise)
 class ListeningAdmin(admin.ModelAdmin):

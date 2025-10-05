@@ -38,9 +38,11 @@ from .services.ai_srs import grade_and_schedule
 from .services.ai_openrouter import openrouter_ai
 
 # learning/views.py
-import os, hashlib, subprocess, shutil, re
+import os, hashlib, subprocess, shutil, re, json, logging
 from django.http import FileResponse, JsonResponse, HttpResponse
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 def tts_view(request):
     """
@@ -88,19 +90,58 @@ def tts_view(request):
 @login_required
 @api_view(["POST"])
 def api_ai_translate(request):
-    """Translate text using AI from OpenRouter"""
-    text_es = request.data.get("text", "").strip()
-    if not text_es:
+    """Translate text using AI from OpenRouter - Enhanced bidirectional translation"""
+    text = request.data.get("text", "").strip()
+    direction = request.data.get("direction", "es_to_gn")  # es_to_gn, gn_to_es, auto
+
+    if not text:
         return Response({"error": "No text provided"}, status=400)
 
     try:
-        translated = openrouter_ai.translate_es_to_gn(text_es)
-        if translated:
-            return Response({"translation": translated, "success": True}, status=200)
+        # Auto-detect direction if not specified
+        if direction == "auto":
+            # Simple detection based on common Guaraní patterns
+            has_guarani_patterns = (
+                "'" in text or
+                text.startswith(('Che', 'Nde', 'Ha\'e', 'Ko')) or
+                any(word in text.lower() for word in ['iko', 'hai', 'hina', 'gua'])
+            )
+            direction = "gn_to_es" if has_guarani_patterns else "es_to_gn"
+
+        if direction == "es_to_gn":
+            translated = openrouter_ai.translate_es_to_gn(text)
+            source_lang = "Español"
+            target_lang = "Guaraní"
+        elif direction == "gn_to_es":
+            translated = openrouter_ai.translate_gn_to_es(text)
+            source_lang = "Guaraní"
+            target_lang = "Español"
         else:
-            return Response({"error": "Translation failed", "success": False}, status=500)
+            return Response({"error": "Invalid direction. Use 'es_to_gn', 'gn_to_es', or 'auto'"}, status=400)
+
+        if translated and translated.strip():
+            return Response({
+                "translation": translated.strip(),
+                "source_text": text,
+                "source_language": source_lang,
+                "target_language": target_lang,
+                "direction": direction,
+                "success": True
+            }, status=200)
+        else:
+            return Response({
+                "error": "Translation failed - no result generated",
+                "success": False,
+                "fallback": text  # Return original text as fallback
+            }, status=200)
+
     except Exception as e:
-        return Response({"error": str(e), "success": False}, status=500)
+        logger.error(f"Translation error: {str(e)}")
+        return Response({
+            "error": "Translation service error",
+            "success": False,
+            "fallback": text
+        }, status=500)
 
 
 @login_required
@@ -143,12 +184,112 @@ def api_ai_generate_exercise(request):
     exercise_type = request.data.get("exercise_type", "translation")
     difficulty = request.data.get("difficulty", "beginner")
 
-    if exercise_type not in ["fill_blank", "mcq", "translation"]:
+    if exercise_type not in ["fill_blank", "mcq", "translation", "drag_drop"]:
         return Response({"error": "Invalid exercise type"}, status=400)
 
     try:
         content = openrouter_ai.generate_exercise_content(exercise_type, difficulty)
         return Response(content, status=200)
+    except Exception as e:
+        return Response({"error": str(e), "success": False}, status=500)
+
+
+@login_required
+@api_view(["POST"])
+def api_ai_generate_drag_drop_exercise(request):
+    """Generate a drag and drop exercise using AI"""
+    try:
+        # Get parameters
+        topic = request.data.get("topic", "oraciones básicas")
+        difficulty = request.data.get("difficulty", "beginner")
+        word_count = int(request.data.get("word_count", 5))
+
+        # Generate sentence using AI
+        prompt = f"""
+        Crea una oración simple en guaraní sobre el tema "{topic}".
+        Dificultad: {difficulty}
+        Número de palabras: alrededor de {word_count}
+
+        IMPORTANTE: Esta es una plataforma para APRENDER GUARANÍ, no español.
+        Todas las palabras deben estar en GUARANÍ, no en español.
+
+        Responde en formato JSON:
+        {{
+            "sentence": "La oración completa en guaraní",
+            "words": ["palabra1", "palabra2", "palabra3"],
+            "instruction": "Instrucción para el ejercicio en guaraní",
+            "hint": "Pista opcional para ayudar al estudiante"
+        }}
+
+        Ejemplos de palabras en guaraní para principiantes:
+        - Saludos: maitei, mba'éichapa
+        - Lugares: óga, escuela, koléggio
+        - Acciones: ahata, aju, ahupi
+        - Objetos: y, tupa, mba'yruguái
+
+        Ejemplo correcto:
+        {{
+            "sentence": "Che ahata koléggiope",
+            "words": ["Che", "ahata", "koléggiope"],
+            "instruction": "Emohenda umi ñe'ẽ ordena hag̃ua:",
+            "hint": "Eñandu peteĩ lugar estudio rehe"
+        }}
+        """
+
+        messages = [
+            {
+                "role": "system",
+                "content": "Eres un experto profesor de guaraní. Crea ejercicios educativos claros y precisos."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        # Use the existing AI service
+        result = openrouter_ai._make_request(
+            openrouter_ai.free_models["content"], messages, 300
+        )
+
+        if result:
+            try:
+                data = json.loads(result)
+
+                # Create the exercise in database
+                lesson, created = Lesson.objects.get_or_create(
+                    title=f"Ejercicio IA: {topic}",
+                    defaults={
+                        "description": f"Ejercicio de arrastrar y soltar generado por IA sobre {topic}",
+                        "order": 999,
+                        "is_published": True
+                    }
+                )
+
+                # Create the drag and drop exercise
+                exercise = DragDropExercise.objects.create(
+                    lesson=lesson,
+                    prompt_text=data.get('instruction', 'Ordena las palabras:'),
+                    correct_tokens=data.get('words', []),
+                    order=DragDropExercise.objects.filter(lesson=lesson).count() + 1
+                )
+
+                return Response({
+                    "success": True,
+                    "exercise": {
+                        "id": exercise.id,
+                        "prompt_text": exercise.prompt_text,
+                        "correct_tokens": exercise.correct_tokens,
+                        "sentence": data.get('sentence', ''),
+                        "hint": data.get('hint', '')
+                    }
+                }, status=200)
+
+            except json.JSONDecodeError:
+                return Response({"error": "Invalid AI response format", "success": False}, status=500)
+        else:
+            return Response({"error": "AI generation failed", "success": False}, status=500)
+
     except Exception as e:
         return Response({"error": str(e), "success": False}, status=500)
 
@@ -565,8 +706,8 @@ def generate_section_content(topic, difficulty, section_num):
         ]
 
         # Use the existing AI service method
-        result = openrouter_ai._OpenRouterAI__class__._make_request(
-            openrouter_ai, openrouter_ai.free_models["content"], messages, 300
+        result = openrouter_ai._make_request(
+            openrouter_ai.free_models["content"], messages, 300
         )
 
         if result:
@@ -722,8 +863,50 @@ def lesson_detail(request, pk):
 
 @login_required
 def glossary_view(request):
-    entries = GlossaryEntry.objects.filter(user=request.user).order_by("-created_at")
-    return render(request, "learning/glossary.html", {"entries": entries})
+    # Get pagination parameters
+    page = int(request.GET.get('page', 1))
+    per_page = 10  # Show 10 words per page
+
+    # Get all entries for the user
+    all_entries = GlossaryEntry.objects.filter(user=request.user).order_by("-created_at")
+
+    # Calculate pagination
+    total_entries = all_entries.count()
+    total_pages = (total_entries + per_page - 1) // per_page  # Ceiling division
+
+    # Ensure page is within valid range
+    page = max(1, min(page, total_pages)) if total_pages > 0 else 1
+
+    # Get entries for current page
+    start_index = (page - 1) * per_page
+    end_index = start_index + per_page
+    entries = all_entries[start_index:end_index]
+
+    # Calculate pagination info
+    has_next = page < total_pages
+    has_prev = page > 1
+    next_page = page + 1 if has_next else None
+    prev_page = page - 1 if has_prev else None
+
+    # Calculate range of pages to show (show 5 pages around current)
+    start_page = max(1, page - 2)
+    end_page = min(total_pages, page + 2)
+    page_range = range(start_page, end_page + 1)
+
+    return render(request, "learning/glossary.html", {
+        "entries": entries,
+        "pagination": {
+            "current_page": page,
+            "total_pages": total_pages,
+            "total_entries": total_entries,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "next_page": next_page,
+            "prev_page": prev_page,
+            "page_range": page_range,
+            "per_page": per_page
+        }
+    })
 
 
 # ------------- Glossary APIs (safe) ------------- #
@@ -763,6 +946,74 @@ def api_add_glossary_entry(request):
         notes=s.validated_data.get("notes", ""),
     )
     return Response({"id": entry.id}, status=201)
+
+
+@login_required
+@api_view(["POST"])
+def api_add_enhanced_glossary_entry(request):
+    """Enhanced API for adding glossary entries with AI-generated metadata"""
+    try:
+        spanish_text = request.data.get("source_text_es", "").strip()
+        guarani_text = request.data.get("translated_text_gn", "").strip()
+
+        if not spanish_text or not guarani_text:
+            return Response({
+                "success": False,
+                "error": "Se requieren texto en español y guaraní"
+            }, status=400)
+
+        # Create enhanced entry with all metadata
+        entry = GlossaryEntry.objects.create(
+            user=request.user,
+            source_text_es=spanish_text,
+            translated_text_gn=guarani_text,
+            category=request.data.get("category", "general"),
+            difficulty=request.data.get("difficulty", "beginner"),
+            tags=request.data.get("tags", []),
+            usage_examples=request.data.get("usage_examples", []),
+            is_favorite=request.data.get("is_favorite", False),
+            notes=request.data.get("notes", "")
+        )
+
+        # Update daily challenge progress if applicable
+        from .models import DailyChallenge, UserDailyChallenge
+        from django.utils import timezone
+
+        today = timezone.now().date()
+        glossary_challenge = DailyChallenge.objects.filter(
+            challenge_type='glossary',
+            is_active=True
+        ).first()
+
+        if glossary_challenge:
+            user_challenge, created = UserDailyChallenge.objects.get_or_create(
+                user=request.user,
+                challenge=glossary_challenge,
+                date=today,
+                defaults={"current_value": 0}
+            )
+            user_challenge.current_value += 1
+            user_challenge.save()
+
+        return Response({
+            "success": True,
+            "id": entry.id,
+            "message": "Palabra agregada exitosamente al glosario",
+            "entry": {
+                "spanish": entry.source_text_es,
+                "guarani": entry.translated_text_gn,
+                "category": entry.category,
+                "difficulty": entry.difficulty,
+                "tags": entry.tags,
+                "is_favorite": entry.is_favorite
+            }
+        }, status=201)
+
+    except Exception as e:
+        return Response({
+            "success": False,
+            "error": str(e)
+        }, status=500)
 
 
 # ------------- Written Exercises APIs ------------- #
@@ -1099,9 +1350,484 @@ def api_glossary_bulk_add(request):
 
     return Response({"created": created}, status=201)
 
+
+@login_required
+@api_view(["POST"])
+def api_glossary_toggle_favorite(request, entry_id):
+    """Toggle favorite status for a glossary entry"""
+    try:
+        entry = GlossaryEntry.objects.get(id=entry_id, user=request.user)
+        entry.is_favorite = not entry.is_favorite
+        entry.save()
+
+        return Response({
+            "success": True,
+            "is_favorite": entry.is_favorite,
+            "message": "Estado de favorito actualizado"
+        }, status=200)
+    except GlossaryEntry.DoesNotExist:
+        return Response({
+            "success": False,
+            "error": "Entrada no encontrada"
+        }, status=404)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
 @login_required
 def exercises_view(request):
   return render(request, "learning/exercises.html")
+
+@login_required
+def chatbot_view(request):
+    """Chatbot interface for practicing Guaraní"""
+    return render(request, "learning/chatbot.html")
+
+
+@login_required
+@api_view(["POST"])
+def api_chatbot(request):
+    """API endpoint for chatbot conversations using OpenRouter AI"""
+    user_message = request.data.get("message", "").strip()
+    selected_model = request.data.get("model", "llama")  # Default to Llama
+
+    if not user_message:
+        return Response({"error": "No message provided"}, status=400)
+
+    try:
+        # Check if API key is configured
+        if not openrouter_ai.api_key:
+            # Fallback to simple responses if no API key
+            return get_fallback_response(user_message)
+
+        # Use fallback responses if user selected "fallback" model
+        if selected_model == "fallback":
+            return get_fallback_response(user_message)
+
+        # Create AI prompt for chatbot conversation
+        prompt = f"""
+        Eres un profesor de guaraní paciente y amigable. El usuario está aprendiendo guaraní.
+
+        Mensaje del usuario (puede estar en español o guaraní): "{user_message}"
+
+        Instrucciones:
+        1. Si el usuario escribió en español, responde PRIMERO en guaraní, luego proporciona la traducción al español
+        2. Si el usuario escribió en guaraní, corrige si hay errores y continúa la conversación en guaraní
+        3. Mantén un tono amigable, motivador y educativo
+        4. Usa vocabulario apropiado para principiantes
+        5. Incluye preguntas para continuar la conversación
+        6. Si hay errores, corrígelos suavemente y explica por qué
+        7. Destaca nuevas palabras o frases importantes
+
+        Responde en formato JSON exactamente con esta estructura:
+        {{
+            "response_guarani": "Tu respuesta completa en guaraní",
+            "response_spanish": "Traducción al español de tu respuesta",
+            "explanation": "Explicación breve de gramática o vocabulario si es necesario",
+            "new_words": ["palabra1", "palabra2"],
+            "follow_up_question": "Pregunta en guaraní para continuar la conversación",
+            "corrections": "Correcciones específicas si hubo errores en el mensaje del usuario"
+        }}
+
+        Ejemplos de respuestas:
+        - Usuario dice "hola" → Responde en guaraní con saludo y pregunta
+        - Usuario dice "che hai juan" → Corrige a "Che hai Juan" y explica
+        - Usuario dice "¿Mba'éichapa?" → Continúa la conversación en guaraní
+        """
+
+        messages = [
+            {
+                "role": "system",
+                "content": """Eres un profesor de guaraní experto, paciente y motivador. Tu objetivo es ayudar a estudiantes principiantes a practicar el idioma guaraní de manera natural y progresiva.
+
+Características importantes:
+- Siempre responde PRIMERO en guaraní, luego proporciona traducción
+- Corrige errores suavemente con explicaciones
+- Usa vocabulario básico apropiado para principiantes
+- Mantén conversaciones naturales y motivadoras
+- Incluye preguntas para mantener el diálogo activo
+- Destaca nuevas palabras cuando sea apropiado"""
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+
+        # Select model based on user choice
+        if selected_model == "deepseek":
+            # Use DeepSeek model (now the default)
+            result = openrouter_ai.chatbot_response(user_message)
+        elif selected_model == "gemma":
+            # Try Gemma model first, fallback to DeepSeek if it fails
+            try:
+                result = openrouter_ai.chatbot_response_with_model(user_message, "gemma")
+            except:
+                result = openrouter_ai.chatbot_response(user_message)
+        elif selected_model == "llama":
+            # Try Llama model first, fallback to DeepSeek if it fails
+            try:
+                result = openrouter_ai.chatbot_response_with_model(user_message, "llama")
+            except:
+                result = openrouter_ai.chatbot_response(user_message)
+        else:
+            # Use fallback responses
+            result = openrouter_ai.chatbot_response(user_message)
+
+        if result:
+            # AI now returns natural language responses with clear format
+            # Clean the response by removing markdown formatting
+            response_text = result.strip()
+
+            # Remove markdown bold formatting (**text**)
+            import re
+            response_text = re.sub(r'\*\*(.*?)\*\*', r'\1', response_text)
+
+            # Try to identify if response contains both Guaraní and Spanish
+            if '(' in response_text and ')' in response_text:
+                # Response format: "Guaraní text (Spanish translation)"
+                parts = response_text.split('(', 1)
+                guarani_part = parts[0].strip()
+                spanish_part = parts[1].rstrip(')').strip() if len(parts) > 1 else ''
+
+                # Extract vocabulary words if present
+                new_words = []
+                vocab_patterns = [
+                    r'palabras nuevas?:?\s*(?:-?\s*)?(.*?)(?:\n|$)',
+                    r'vocabulary?:?\s*(?:-?\s*)?(.*?)(?:\n|$)',
+                    r'ñe\'ẽ pyahu:?\s*(?:-?\s*)?(.*?)(?:\n|$)',
+                    r'nuevas?\s*palabras?:?\s*(?:-?\s*)?(.*?)(?:\n|$)'
+                ]
+
+                for pattern in vocab_patterns:
+                    match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        vocab_section = match.group(1).strip()
+                        # Extract words that look like vocabulary definitions (word = meaning)
+                        word_matches = re.findall(r'[-•]\s*([^=]+?)\s*[:=]', vocab_section)
+                        if word_matches:
+                            new_words = [word.strip() for word in word_matches]
+                            break
+
+                return Response({
+                    "response_guarani": guarani_part,
+                    "response_spanish": spanish_part,
+                    "explanation": "Respuesta generada por IA usando DeepSeek",
+                    "new_words": new_words,
+                    "follow_up_question": "¿Quieres practicar más?",
+                    "corrections": "",
+                    "success": True
+                }, status=200)
+            else:
+                # Single language response - try to split by common separators
+                lines = response_text.split('\n')
+                if len(lines) >= 2:
+                    # First line as Guaraní, second as Spanish
+                    guarani_part = lines[0].strip()
+                    spanish_part = lines[1].strip()
+                else:
+                    # All as Guaraní
+                    guarani_part = response_text
+                    spanish_part = "Respuesta generada por IA"
+
+                return Response({
+                    "response_guarani": guarani_part,
+                    "response_spanish": spanish_part,
+                    "explanation": "Esta respuesta fue generada por inteligencia artificial",
+                    "new_words": [],
+                    "follow_up_question": "¿Qué más quieres saber?",
+                    "corrections": "",
+                    "success": True
+                }, status=200)
+        else:
+            # Fallback if AI fails
+            return get_fallback_response(user_message)
+
+    except Exception as e:
+        logger.error(f"Chatbot API error: {str(e)}")
+        # Fallback error response
+        return Response({
+            "response_guarani": "Lo siento, hubo un problema técnico.",
+            "response_spanish": "Sorry, there was a technical problem.",
+            "explanation": "Error en el servidor",
+            "new_words": [],
+            "follow_up_question": "¿Quieres intentar de nuevo?",
+            "success": True
+        }, status=200)
+
+
+def get_fallback_response(user_message: str) -> Response:
+    """Get conversational fallback response when AI is not available"""
+    message_lower = user_message.lower().strip()
+
+    # Enhanced conversational responses
+    responses = {
+        # Greetings
+        "hola": {
+            "response_guarani": "¡Mba'éichapa! Che hai profesor de guaraní. ¿Moõ guive rejikói? ¿Mba'éichapa nde réra?",
+            "response_spanish": "¡Hola! Soy tu profesor de guaraní. ¿De dónde eres? ¿Cómo te llamas?",
+            "explanation": "Saludo básico en guaraní",
+            "new_words": ["Mba'éichapa", "hai", "profesor", "réra"],
+            "follow_up_question": "¿Moõ guive rejikói?",
+            "success": True
+        },
+        "buenos dias": {
+            "response_guarani": "¡Mba'éichapa! ¿Mba'éichapa nde réra? ¿Reju aju escuela peve ko ára?",
+            "response_spanish": "¡Buenos días! ¿Cómo te llamas? ¿Vienes a la escuela hoy?",
+            "explanation": "Saludo matutino con pregunta sobre actividades",
+            "new_words": ["Mba'éichapa", "réra", "escuela", "ára"],
+            "follow_up_question": "¿Moõpa rejapo ko ára?",
+            "success": True
+        },
+        "buenas tardes": {
+            "response_guarani": "¡Mba'éichapa! ¿Mba'éichapa reime? ¿Reho jahu ko pytũmbýpe?",
+            "response_spanish": "¡Buenas tardes! ¿Cómo estás? ¿Vas a salir esta tarde?",
+            "explanation": "Saludo vespertino",
+            "new_words": ["Mba'éichapa", "reime", "jahu", "pytũmbýpe"],
+            "follow_up_question": "¿Moõpa rejapo?",
+            "success": True
+        },
+        "buenas noches": {
+            "response_guarani": "¡Mba'éichapa! ¿Reho ke ko pytũmbýpe? ¿Mba'éichapa reime?",
+            "response_spanish": "¡Buenas noches! ¿Vas a dormir esta noche? ¿Cómo estás?",
+            "explanation": "Saludo nocturno",
+            "new_words": ["Mba'éichapa", "ke", "pytũmbýpe", "reime"],
+            "follow_up_question": "¿Reho ke porã?",
+            "success": True
+        },
+        "como estas": {
+            "response_guarani": "Che iko porã. ¿Ndépa nde irũ? ¿Ha nde familia? ¿Mba'éichapa oiko?",
+            "response_spanish": "Estoy bien. ¿Y tu familia? ¿Cómo están? ¿Qué tal todo?",
+            "explanation": "Preguntar por el estado de alguien y su familia",
+            "new_words": ["iko", "porã", "familia", "oiko"],
+            "follow_up_question": "¿Mba'éichapa nde familia?",
+            "success": True
+        },
+        "como te llamas": {
+            "response_guarani": "Che hai profesor de guaraní. ¿Ndépa nde réra? ¿Moõ guive rejikói?",
+            "response_spanish": "Soy profesor de guaraní. ¿Y tú? ¿Cómo te llamas? ¿De dónde eres?",
+            "explanation": "Presentación y pregunta recíproca",
+            "new_words": ["hai", "profesor", "réra", "jikói"],
+            "follow_up_question": "¿Moõ guive rejikói?",
+            "success": True
+        },
+        # Common questions
+        "que es guarani": {
+            "response_guarani": "Guaraní ha'e peteĩ ñe'ẽ indígena, avañe'ẽ del Paraguay ha Argentina. ¡Ko'ápe rojapo Guaraní Quest!",
+            "response_spanish": "Guaraní es un idioma indígena, lengua oficial del Paraguay y Argentina. ¡Aquí hacemos Guaraní Quest!",
+            "explanation": "Información sobre el idioma guaraní",
+            "new_words": ["ñe'ẽ", "indígena", "avañe'ẽ", "Paraguay"],
+            "follow_up_question": "¿Reikuaápa guaraní?",
+            "success": True
+        },
+        "como se dice": {
+            "response_guarani": "¡Ajapo traducciones! Ejapo cheve mba'e eñe'ẽme ha ahechauka ndéve guaraníme.",
+            "response_spanish": "¡Hago traducciones! Dime algo en español y te muestro cómo se dice en guaraní.",
+            "explanation": "Ofreciendo ayuda con traducciones",
+            "new_words": ["traducciones", "ñe'ẽme", "ahechauka", "ndéve"],
+            "follow_up_question": "¿Mba'épa ereko ñe'ẽme?",
+            "success": True
+        },
+        "gracias": {
+            "response_guarani": "¡Mba'éichapa! Ndaipori vai. ¿Ejaposeve guaraní?",
+            "response_spanish": "¡De nada! No hay problema. ¿Quieres practicar más guaraní?",
+            "explanation": "Respuesta de cortesía",
+            "new_words": ["ndaipori", "vai", "ejaposeve"],
+            "follow_up_question": "¿Ejaposeve guaraní?",
+            "success": True
+        },
+        "adios": {
+            "response_guarani": "¡Jajoecha peve! ¡Kesaludos! ¡Ejapo porã guaranípe!",
+            "response_spanish": "¡Hasta luego! ¡Saludos! ¡Hazlo bien con el guaraní!",
+            "explanation": "Despedida motivadora",
+            "new_words": ["jajoecha", "peve", "kesaludos", "ejapo"],
+            "follow_up_question": "¿Ejujuve?",
+            "success": True
+        }
+    }
+
+    # Check for exact matches first
+    if message_lower in responses:
+        return Response(responses[message_lower], status=200)
+
+    # Check for partial matches and keywords
+    keywords = {
+        "nombre": {
+            "response_guarani": "Che hai profesor de guaraní. ¿Ndépa nde réra? ¡Añembo'e guaraní!",
+            "response_spanish": "Soy profesor de guaraní. ¿Y tú? ¿Cómo te llamas? ¡Aprendamos guaraní!",
+            "explanation": "Pregunta sobre nombres",
+            "new_words": ["hai", "réra", "añembo'e"],
+            "follow_up_question": "¿Moõ guive rejikói?",
+            "success": True
+        },
+        "familia": {
+            "response_guarani": "Che familia iko porã. ¿Ndépa nde família? ¿Heta membyguára repoko?",
+            "response_spanish": "Mi familia está bien. ¿Y la tuya? ¿Tienes muchos hermanos?",
+            "explanation": "Conversación sobre familia",
+            "new_words": ["familia", "heta", "membyguára"],
+            "follow_up_question": "¿Heta membyguára repoko?",
+            "success": True
+        },
+        "escuela": {
+            "response_guarani": "Rohina escuela peve. ¿Ndépa rejapo escuela rupi? ¿Mba'épa reikuaá?",
+            "response_spanish": "Voy a la escuela. ¿Y tú qué haces en la escuela? ¿Qué aprendes?",
+            "explanation": "Conversación sobre escuela",
+            "new_words": ["rohina", "escuela", "reikuaá"],
+            "follow_up_question": "¿Mba'épa reikuaá?",
+            "success": True
+        },
+        "agua": {
+            "response_guarani": "¡Ajoguahina y! Y ha'e mba'e hekopete. ¿Ndépa rejoguahina?",
+            "response_spanish": "¡Quiero tomar agua! El agua es algo importante. ¿Y tú tomas agua?",
+            "explanation": "Conversación sobre agua",
+            "new_words": ["ajoguahina", "hekopete", "rejoguahina"],
+            "follow_up_question": "¿Ndépa rejoguahina?",
+            "success": True
+        }
+    }
+
+    # Check for keywords in the message
+    for keyword, response_data in keywords.items():
+        if keyword in message_lower:
+            return Response(response_data, status=200)
+
+    # More intelligent default responses based on message content
+    if any(word in message_lower for word in ["soy", "me llamo", "mi nombre"]):
+        return Response({
+            "response_guarani": "¡Péa porã! Che hai profesor de guaraní. ¡Añembo'e guaraní nde ndive!",
+            "response_spanish": "¡Qué bueno! Soy profesor de guaraní. ¡Aprendamos guaraní juntos!",
+            "explanation": "Respuesta positiva a presentación",
+            "new_words": ["péa", "porã", "añembo'e", "ndive"],
+            "follow_up_question": "¿Mba'épa reikuaá guaraníme?",
+            "success": True
+        }, status=200)
+
+    elif any(word in message_lower for word in ["argentina", "paraguay", "uruguay", "brasil"]):
+        return Response({
+            "response_guarani": "¡Guaraní oñe'ẽ Paraguay ha Argentina rupi! ¿Répa reikuaá guaraní?",
+            "response_spanish": "¡El guaraní se habla en Paraguay y Argentina! ¿Tú sabes guaraní?",
+            "explanation": "Información sobre países donde se habla guaraní",
+            "new_words": ["oñe'ẽ", "Paraguay", "Argentina", "reikuaá"],
+            "follow_up_question": "¿Répa reikuaá guaraní?",
+            "success": True
+        }, status=200)
+
+    # Default contextual response
+    return Response({
+        "response_guarani": f"¡Interesante! '{user_message}' Ha'e peteĩ mba'e porã. ¿Ikatu pa ejapo chéve traducción?",
+        "response_spanish": f"¡Interesante! '{user_message}' es algo bueno. ¿Puedes pedirme una traducción?",
+        "explanation": "Invitación a pedir traducciones",
+        "new_words": ["interesante", "porã", "ikatu", "traducción"],
+        "follow_up_question": "¿Mba'épa ereko ñe'ẽme?",
+        "success": True
+    }, status=200)
+
+
+@login_required
+def fill_blank_exercise(request):
+  """Fill in the blank exercise page"""
+  # Get or create sample fill-in-the-blank exercises for demo
+  exercises = FillBlankExercise.objects.filter(lesson__is_published=True).order_by('lesson__order', 'order')
+
+  if not exercises:
+    # Create sample exercises for demo if none exist (Guaraní examples)
+    sample_exercises = [
+      {
+        "prompt_text": "Mba'éichapa, ___?",
+        "correct_answer": "iko",
+        "hint": "Significa 'estoy' en guaraní"
+      },
+      {
+        "prompt_text": "Che ___ María.",
+        "correct_answer": "hai",
+        "hint": "Significa 'soy' en guaraní"
+      },
+      {
+        "prompt_text": "Rohina ___ rehe.",
+        "correct_answer": "escuela",
+        "hint": "Lugar donde se estudia"
+      }
+    ]
+
+    # Create sample lesson if it doesn't exist
+    lesson, created = Lesson.objects.get_or_create(
+      title="Ejercicios de Completar Espacios",
+      defaults={
+        "description": "Practica completando oraciones en guaraní",
+        "order": 998,
+        "is_published": True
+      }
+    )
+
+    # Create sample exercises
+    for i, ex_data in enumerate(sample_exercises):
+      if not FillBlankExercise.objects.filter(lesson=lesson, order=i+1).exists():
+        FillBlankExercise.objects.create(
+          lesson=lesson,
+          prompt_text=ex_data["prompt_text"],
+          correct_answer=ex_data["correct_answer"],
+          order=i+1
+        )
+
+    exercises = FillBlankExercise.objects.filter(lesson=lesson)
+
+  return render(request, "learning/fill_blank_exercise.html", {
+    "exercises": exercises,
+    "title": "Completar Espacios"
+  })
+
+
+@login_required
+def drag_drop_exercise(request):
+  """Drag and Drop exercise page"""
+  # Get or create sample drag and drop exercises for demo
+  exercises = DragDropExercise.objects.filter(lesson__is_published=True).order_by('lesson__order', 'order')
+
+  if not exercises:
+    # Create sample exercises for demo if none exist (Guaraní examples)
+    sample_exercises = [
+      {
+        "instruction": "Ordena las palabras para formar una oración correcta en guaraní:",
+        "scrambled_tokens": ["che", "rohina", "escuela", "peve"],
+        "correct_tokens": ["che", "rohina", "escuela", "peve"],
+        "hint": "Piensa en ir a un lugar para estudiar"
+      },
+      {
+        "instruction": "Completa la oración con las palabras en orden correcto:",
+        "scrambled_tokens": ["agua", "ajoguahina", "rogue"],
+        "correct_tokens": ["ajoguahina", "agua", "rogue"],
+        "hint": "Es algo que haces cuando tienes sed"
+      }
+    ]
+
+    # Create sample lesson if it doesn't exist
+    lesson, created = Lesson.objects.get_or_create(
+      title="Ejercicios de Arrastrar y Soltar",
+      defaults={
+        "description": "Practica ordenando palabras para formar oraciones correctas",
+        "order": 999,
+        "is_published": True
+      }
+    )
+
+    # Create sample exercises
+    for i, ex_data in enumerate(sample_exercises):
+      if not DragDropExercise.objects.filter(lesson=lesson, order=i+1).exists():
+        DragDropExercise.objects.create(
+          lesson=lesson,
+          prompt_text=ex_data["instruction"],
+          correct_tokens=ex_data["correct_tokens"],
+          order=i+1
+        )
+
+    exercises = DragDropExercise.objects.filter(lesson=lesson)
+
+  return render(request, "learning/drag_drop_exercise.html", {
+    "exercises": exercises,
+    "title": "Arrastrar y Soltar"
+  })
 
 @login_required
 def lessons_overview(request):
