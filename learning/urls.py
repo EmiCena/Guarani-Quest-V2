@@ -59,4 +59,6 @@ path("api/award-achievement/", views.api_award_achievement, name="api_award_achi
 
 # AI Lesson Creation
 path("create-lesson-ai/", views.create_lesson_ai, name="create_lesson_ai"),
+path("create-lesson-manual/", views.create_lesson_manual, name="create_lesson_manual"),
+path("admin-panel/", views.admin_panel, name="admin_panel"),
 ]

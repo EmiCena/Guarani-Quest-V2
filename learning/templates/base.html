@@ -40,7 +40,7 @@
         <a href="{% url 'exercises' %}">Ejercicios</a>
         <a href="{% url 'glossary' %}">Glosario</a>
         {% if user.is_staff %}
-          <a href="{% url 'create_lesson_ai' %}">🤖 Crear con IA</a>
+          <a href="{% url 'admin_panel' %}">⚙️ Admin</a>
         {% endif %}
       </nav>
 
@@ -117,9 +117,9 @@
         <span class="sidebar-text">Glosario</span>
       </a>
       {% if user.is_staff %}
-        <a href="{% url 'create_lesson_ai' %}" class="sidebar-link">
-          <span class="sidebar-icon">🤖</span>
-          <span class="sidebar-text">Crear con IA</span>
+        <a href="{% url 'admin_panel' %}" class="sidebar-link">
+          <span class="sidebar-icon">⚙️</span>
+          <span class="sidebar-text">Panel Admin</span>
         </a>
       {% endif %}
     </nav>

@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Q
 from django.shortcuts import get_object_or_404, render, redirect
@@ -654,26 +655,118 @@ def create_lesson_ai(request):
 
         # Generate sections using AI
         sections_created = 0
+        exercises_created = 0
+
         for i in range(sections_count):
             section_content = generate_section_content(topic, difficulty, i+1)
 
             if section_content:
-                LessonSection.objects.create(
+                # Create the section
+                section = LessonSection.objects.create(
                     lesson=lesson,
                     title=section_content['title'],
-                    content=section_content['content'],
-                    order=i+1,
-                    section_type='content'
+                    body=section_content['content'],
+                    order=i+1
                 )
                 sections_created += 1
+
+                # Generate exercises for this section if available
+                if 'exercises' in section_content and section_content['exercises']:
+                    for j, exercise_data in enumerate(section_content['exercises']):
+                        if exercise_data.get('type') == 'fill_blank':
+                            FillBlankExercise.objects.create(
+                                lesson=lesson,
+                                prompt_text=exercise_data.get('question', ''),
+                                correct_answer=exercise_data.get('correct_answer', ''),
+                                order=sections_created + j
+                            )
+                            exercises_created += 1
+                        elif exercise_data.get('type') == 'mcq':
+                            # For MCQ, we need to create choices JSON
+                            choices = exercise_data.get('choices', ['A', 'B', 'C'])
+                            choices_json = []
+                            for idx, choice in enumerate(choices):
+                                choices_json.append({
+                                    "key": chr(65 + idx),  # A, B, C, etc.
+                                    "text": choice
+                                })
+
+                            MultipleChoiceExercise.objects.create(
+                                lesson=lesson,
+                                question_text=exercise_data.get('question', ''),
+                                choices_json=choices_json,
+                                correct_key=exercise_data.get('correct_key', 'A'),
+                                order=sections_created + j
+                            )
+                            exercises_created += 1
 
         return render(request, "learning/create_lesson_ai.html", {
             "success": True,
             "lesson": lesson,
-            "sections_created": sections_created
+            "sections_created": sections_created,
+            "exercises_created": exercises_created
         })
 
     return render(request, "learning/create_lesson_ai.html")
+
+
+@login_required
+def create_lesson_manual(request):
+    """Web interface for creating lessons manually (Admin only)"""
+    # Check if user is admin
+    if not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Acceso denegado. Esta función es solo para administradores.")
+
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        description = request.POST.get("description", "").strip()
+        is_published = request.POST.get("is_published") == "on"
+
+        if not title:
+            return render(request, "learning/create_lesson_manual.html", {
+                "error": "El título es requerido",
+                "title": title,
+                "description": description,
+                "is_published": is_published
+            })
+
+        # Create the lesson
+        lesson = Lesson.objects.create(
+            title=title,
+            description=description,
+            order=Lesson.objects.count() + 1,
+            is_published=is_published
+        )
+
+        return render(request, "learning/create_lesson_manual.html", {
+            "success": True,
+            "lesson": lesson
+        })
+
+    return render(request, "learning/create_lesson_manual.html")
+
+
+@login_required
+def admin_panel(request):
+    """Panel administrativo principal con acceso organizado a todas las funciones"""
+    # Check if user is admin
+    if not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Acceso denegado. Esta función es solo para administradores.")
+
+    # Get statistics
+    total_lessons = Lesson.objects.count()
+    published_lessons = Lesson.objects.filter(is_published=True).count()
+    total_users = User.objects.count()
+    total_glossary_entries = GlossaryEntry.objects.count()
+
+    return render(request, "learning/admin_panel.html", {
+        "total_lessons": total_lessons,
+        "published_lessons": published_lessons,
+        "total_users": total_users,
+        "total_glossary_entries": total_glossary_entries
+    })
 
 
 def generate_section_content(topic, difficulty, section_num):
@@ -683,21 +776,36 @@ def generate_section_content(topic, difficulty, section_num):
         from learning.services.ai_openrouter import openrouter_ai
 
         prompt = f"""
-        Crea contenido para la sección {section_num} de una lección sobre "{topic}" en guaraní.
+        Crea contenido educativo completo para la sección {section_num} de una lección sobre "{topic}" en guaraní.
         Dificultad: {difficulty}
+
+        IMPORTANTE: Crea contenido que INCLUYA ejercicios prácticos integrados.
 
         Responde en formato JSON con:
         {{
             "title": "Título de la sección",
-            "content": "Contenido educativo en español sobre el tema",
-            "key_phrases": ["frase1", "frase2", "frase3"]
+            "content": "Contenido educativo en español con explicaciones claras",
+            "key_phrases": ["frase1", "frase2", "frase3"],
+            "exercises": [
+                {{
+                    "type": "fill_blank",
+                    "question": "Texto con ____ para completar",
+                    "correct_answer": "respuesta correcta"
+                }},
+                {{
+                    "type": "mcq",
+                    "question": "Pregunta de opción múltiple",
+                    "choices": ["A", "B", "C"],
+                    "correct_key": "A"
+                }}
+            ]
         }}
         """
 
         messages = [
             {
                 "role": "system",
-                "content": "Eres un experto profesor de guaraní. Crea contenido educativo estructurado y preciso."
+                "content": "Eres un experto profesor de guaraní. Crea contenido educativo completo con ejercicios prácticos incluidos."
             },
             {
                 "role": "user",
@@ -705,35 +813,61 @@ def generate_section_content(topic, difficulty, section_num):
             }
         ]
 
-        # Use the existing AI service method
-        result = openrouter_ai._make_request(
-            openrouter_ai.free_models["content"], messages, 300
-        )
+        # Use the existing AI service method - fix async issue
+        try:
+            import asyncio
+            result = asyncio.run(openrouter_ai._make_request(
+                openrouter_ai.free_models["content"], messages, 300
+            ))
+        except:
+            # Fallback if async doesn't work
+            result = None
 
         if result:
             try:
                 data = json.loads(result)
                 return {
                     'title': data.get('title', f'Sección {section_num}: {topic.title()}'),
-                    'content': data.get('content', f'Contenido sobre {topic}'),
-                    'key_phrases': data.get('key_phrases', [])
+                    'content': data.get('content', f'Contenido educativo sobre {topic} con ejercicios incluidos.'),
+                    'key_phrases': data.get('key_phrases', []),
+                    'exercises': data.get('exercises', [])
                 }
             except json.JSONDecodeError:
                 pass
 
-        # Fallback content
+        # Enhanced fallback content with exercises
         return {
             'title': f'Sección {section_num}: {topic.title()}',
-            'content': f'Contenido educativo sobre {topic}. Esta sección fue creada automáticamente.',
-            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3']
+            'content': f'Contenido educativo sobre {topic}. Esta sección incluye ejercicios prácticos para reforzar el aprendizaje.',
+            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3'],
+            'exercises': [
+                {
+                    'type': 'fill_blank',
+                    'question': f'Complete la oración sobre {topic}: "Che ___ estudiante de guaraní"',
+                    'correct_answer': 'iko'
+                },
+                {
+                    'type': 'mcq',
+                    'question': f'¿Cómo se dice "hola" en guaraní?',
+                    'choices': ['Mba\'éichapa', 'Jajoecha', 'Aguyje'],
+                    'correct_key': 'A'
+                }
+            ]
         }
 
-    except Exception:
-        # Simple fallback
+    except Exception as e:
+        # Enhanced fallback with exercises
         return {
             'title': f'Sección {section_num}: {topic.title()}',
-            'content': f'Contenido educativo sobre {topic}. Esta sección fue creada automáticamente.',
-            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3']
+            'content': f'Contenido educativo sobre {topic}. Esta sección incluye ejercicios prácticos para reforzar el aprendizaje.',
+            'key_phrases': ['Frase de ejemplo 1', 'Frase de ejemplo 2', 'Frase de ejemplo 3'],
+            'exercises': [
+                {
+                    'type': 'fill_blank',
+                    'question': f'Complete: "___" significa "hola" en guaraní',
+                    'correct_answer': 'Mba\'éichapa'
+                }
+            ]
         }
 # ------------- Auth / Basic pages ------------- #
 
