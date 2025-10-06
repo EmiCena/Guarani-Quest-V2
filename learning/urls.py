@@ -48,6 +48,10 @@ path("api/ai-pronunciation-analysis/", views.api_ai_pronunciation_analysis, name
 path("api/ai-generate-exercise/", views.api_ai_generate_exercise, name="api_ai_generate_exercise"),
     path("api/ai-generate-drag-drop/", views.api_ai_generate_drag_drop_exercise, name="api_ai_generate_drag_drop_exercise"),
     path("api/chatbot/", views.api_chatbot, name="api_chatbot"),
+    path("api/chatbot/conversations/", views.api_chatbot_conversations, name="api_chatbot_conversations"),
+    path("api/chatbot/conversations/new/", views.api_chatbot_new_conversation, name="api_chatbot_new_conversation"),
+    path("api/chatbot/conversations/<int:conversation_id>/", views.api_chatbot_conversation_messages, name="api_chatbot_conversation_messages"),
+    path("api/chatbot/conversations/<int:conversation_id>/delete/", views.api_chatbot_delete_conversation, name="api_chatbot_delete_conversation"),
 
 # Enhanced Gamification APIs
 path("api/user-profile/", views.api_user_profile, name="api_user_profile"),

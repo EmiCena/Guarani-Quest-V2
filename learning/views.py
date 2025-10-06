@@ -1521,11 +1521,146 @@ def chatbot_view(request):
 
 
 @login_required
+@api_view(["GET"])
+def api_chatbot_conversations(request):
+    """Get user's chatbot conversations"""
+    try:
+        conversations = ChatConversation.objects.filter(user=request.user).order_by('-updated_at')
+
+        conversations_data = []
+        for conv in conversations[:20]:  # Limit to last 20 conversations
+            conversations_data.append({
+                "id": conv.id,
+                "title": conv.title or f"Chat del {conv.started_at.strftime('%d/%m/%Y %H:%M')}",
+                "started_at": conv.started_at.isoformat(),
+                "updated_at": conv.updated_at.isoformat(),
+                "message_count": conv.get_message_count(),
+                "last_message_preview": conv.get_last_message_preview(),
+                "is_active": conv.is_active
+            })
+
+        return Response({
+            "conversations": conversations_data,
+            "success": True
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"Error getting conversations: {str(e)}")
+        return Response({
+            "error": "Error al obtener conversaciones",
+            "success": False
+        }, status=500)
+
+
+@login_required
+@api_view(["GET"])
+def api_chatbot_conversation_messages(request, conversation_id):
+    """Get messages for a specific conversation"""
+    try:
+        conversation = ChatConversation.objects.get(id=conversation_id, user=request.user)
+
+        messages = ChatMessage.objects.filter(conversation=conversation).order_by('created_at')
+
+        messages_data = []
+        for msg in messages:
+            messages_data.append({
+                "id": msg.id,
+                "user_message": msg.user_message,
+                "bot_response_guarani": msg.bot_response_guarani,
+                "bot_response_spanish": msg.bot_response_spanish,
+                "explanation": msg.explanation,
+                "new_words": msg.new_words,
+                "model_used": msg.model_used,
+                "created_at": msg.created_at.isoformat()
+            })
+
+        return Response({
+            "conversation": {
+                "id": conversation.id,
+                "title": conversation.title,
+                "started_at": conversation.started_at.isoformat(),
+                "updated_at": conversation.updated_at.isoformat()
+            },
+            "messages": messages_data,
+            "success": True
+        }, status=200)
+
+    except ChatConversation.DoesNotExist:
+        return Response({
+            "error": "Conversación no encontrada",
+            "success": False
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error getting conversation messages: {str(e)}")
+        return Response({
+            "error": "Error al obtener mensajes",
+            "success": False
+        }, status=500)
+
+
+@login_required
+@api_view(["POST"])
+def api_chatbot_new_conversation(request):
+    """Create a new chatbot conversation"""
+    try:
+        title = request.data.get("title", "").strip()
+
+        if not title:
+            # Generate automatic title based on current time
+            title = f"Chat del {timezone.now().strftime('%d/%m/%Y %H:%M')}"
+
+        conversation = ChatConversation.objects.create(
+            user=request.user,
+            title=title
+        )
+
+        return Response({
+            "conversation_id": conversation.id,
+            "title": conversation.title,
+            "success": True
+        }, status=201)
+
+    except Exception as e:
+        logger.error(f"Error creating new conversation: {str(e)}")
+        return Response({
+            "error": "Error al crear nueva conversación",
+            "success": False
+        }, status=500)
+
+
+@login_required
+@api_view(["DELETE"])
+def api_chatbot_delete_conversation(request, conversation_id):
+    """Delete a chatbot conversation"""
+    try:
+        conversation = ChatConversation.objects.get(id=conversation_id, user=request.user)
+        conversation.delete()
+
+        return Response({
+            "message": "Conversación eliminada exitosamente",
+            "success": True
+        }, status=200)
+
+    except ChatConversation.DoesNotExist:
+        return Response({
+            "error": "Conversación no encontrada",
+            "success": False
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {str(e)}")
+        return Response({
+            "error": "Error al eliminar conversación",
+            "success": False
+        }, status=500)
+
+
+@login_required
 @api_view(["POST"])
 def api_chatbot(request):
     """API endpoint for chatbot conversations using OpenRouter AI"""
     user_message = request.data.get("message", "").strip()
     selected_model = request.data.get("model", "llama")  # Default to Llama
+    conversation_id = request.data.get("conversation_id")  # Optional conversation ID
 
     if not user_message:
         return Response({"error": "No message provided"}, status=400)
@@ -1645,6 +1780,40 @@ Características importantes:
                             new_words = [word.strip() for word in word_matches]
                             break
 
+                # Save conversation and message to database
+                from .models import ChatConversation, ChatMessage
+
+                # Get or create conversation
+                if conversation_id:
+                    try:
+                        conversation = ChatConversation.objects.get(id=conversation_id, user=request.user)
+                    except ChatConversation.DoesNotExist:
+                        conversation = None
+
+                if not conversation_id or not conversation:
+                    # Create new conversation
+                    conversation = ChatConversation.objects.create(
+                        user=request.user,
+                        title=f"Chat del {timezone.now().strftime('%d/%m/%Y %H:%M')}"
+                    )
+
+                # Save user message
+                ChatMessage.objects.create(
+                    conversation=conversation,
+                    user_message=user_message,
+                    model_used=selected_model
+                )
+
+                # Save bot response
+                ChatMessage.objects.create(
+                    conversation=conversation,
+                    bot_response_guarani=guarani_part,
+                    bot_response_spanish=spanish_part,
+                    explanation="Respuesta generada por IA usando DeepSeek",
+                    new_words=new_words,
+                    model_used=selected_model
+                )
+
                 return Response({
                     "response_guarani": guarani_part,
                     "response_spanish": spanish_part,
@@ -1652,7 +1821,8 @@ Características importantes:
                     "new_words": new_words,
                     "follow_up_question": "¿Quieres practicar más?",
                     "corrections": "",
-                    "success": True
+                    "success": True,
+                    "conversation_id": conversation.id
                 }, status=200)
             else:
                 # Single language response - try to split by common separators
@@ -1666,6 +1836,40 @@ Características importantes:
                     guarani_part = response_text
                     spanish_part = "Respuesta generada por IA"
 
+                # Save conversation and message to database
+                from .models import ChatConversation, ChatMessage
+
+                # Get or create conversation
+                if conversation_id:
+                    try:
+                        conversation = ChatConversation.objects.get(id=conversation_id, user=request.user)
+                    except ChatConversation.DoesNotExist:
+                        conversation = None
+
+                if not conversation_id or not conversation:
+                    # Create new conversation
+                    conversation = ChatConversation.objects.create(
+                        user=request.user,
+                        title=f"Chat del {timezone.now().strftime('%d/%m/%Y %H:%M')}"
+                    )
+
+                # Save user message
+                ChatMessage.objects.create(
+                    conversation=conversation,
+                    user_message=user_message,
+                    model_used=selected_model
+                )
+
+                # Save bot response
+                ChatMessage.objects.create(
+                    conversation=conversation,
+                    bot_response_guarani=guarani_part,
+                    bot_response_spanish=spanish_part,
+                    explanation="Esta respuesta fue generada por inteligencia artificial",
+                    new_words=[],
+                    model_used=selected_model
+                )
+
                 return Response({
                     "response_guarani": guarani_part,
                     "response_spanish": spanish_part,
@@ -1673,7 +1877,8 @@ Características importantes:
                     "new_words": [],
                     "follow_up_question": "¿Qué más quieres saber?",
                     "corrections": "",
-                    "success": True
+                    "success": True,
+                    "conversation_id": conversation.id
                 }, status=200)
         else:
             # Fallback if AI fails

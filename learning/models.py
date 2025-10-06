@@ -798,3 +798,60 @@ class VirtualPet(models.Model):
         import random
         mood_messages = messages.get(self.mood, messages['happy'])
         return random.choice(mood_messages)
+
+
+# ---------- Chatbot Conversation Models ----------
+
+class ChatConversation(models.Model):
+    """Model to store chatbot conversations for each user"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_conversations')
+    title = models.CharField(max_length=200, blank=True, help_text="Título de la conversación (opcional)")
+    started_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-started_at']
+
+    def __str__(self):
+        return f"Chat {self.id} - {self.user.username} - {self.started_at.strftime('%Y-%m-%d %H:%M')}"
+
+    def get_message_count(self):
+        """Get the number of messages in this conversation"""
+        return self.messages.count()
+
+    def get_last_message_preview(self, max_length=50):
+        """Get a preview of the last message"""
+        last_message = self.messages.order_by('-created_at').first()
+        if last_message:
+            text = last_message.user_message if last_message.user_message else last_message.bot_response_guarani
+            if len(text) > max_length:
+                return text[:max_length] + '...'
+            return text
+        return 'Nueva conversación'
+
+
+class ChatMessage(models.Model):
+    """Individual messages within a conversation"""
+    conversation = models.ForeignKey(ChatConversation, on_delete=models.CASCADE, related_name='messages')
+    user_message = models.TextField(blank=True, help_text="Mensaje del usuario")
+    bot_response_guarani = models.TextField(blank=True, help_text="Respuesta del bot en guaraní")
+    bot_response_spanish = models.TextField(blank=True, help_text="Traducción al español")
+    explanation = models.TextField(blank=True, help_text="Explicación adicional")
+    new_words = models.JSONField(default=list, blank=True, help_text="Nuevas palabras aprendidas")
+    model_used = models.CharField(max_length=50, default='deepseek', help_text="Modelo de IA utilizado")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message {self.id} - {self.conversation.user.username} - {self.created_at.strftime('%H:%M')}"
+
+    def get_display_text(self):
+        """Get the text to display (user message or bot response)"""
+        if self.user_message:
+            return self.user_message
+        elif self.bot_response_guarani:
+            return self.bot_response_guarani
+        return 'Mensaje vacío'

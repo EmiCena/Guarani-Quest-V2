@@ -8,15 +8,31 @@
     <h1>💬 Chatbot Guaraní</h1>
     <p class="chatbot-subtitle">Practica guaraní conversando con un profesor virtual</p>
 
-    <!-- Model Selection -->
-    <div class="model-selection">
-      <label for="modelSelect">Modelo de IA:</label>
-      <select id="modelSelect" onchange="changeModel()">
-        <option value="deepseek" selected>DeepSeek Chat (Más rápido y confiable)</option>
-        <option value="llama">Llama 3.2 (Alternativo)</option>
-        <option value="gemma">Gemma 2 (Compacto)</option>
-        <option value="fallback">Solo respuestas básicas</option>
-      </select>
+    <!-- Conversation Management -->
+    <div class="conversation-management">
+      <div class="conversation-selector">
+        <label for="conversationSelect">Conversación:</label>
+        <select id="conversationSelect" onchange="loadConversation()">
+          <option value="">Nueva conversación</option>
+        </select>
+        <button id="newConversationBtn" onclick="createNewConversation()" title="Nueva conversación">
+          ➕
+        </button>
+        <button id="deleteConversationBtn" onclick="deleteConversation()" title="Eliminar conversación" style="display: none;">
+          🗑️
+        </button>
+      </div>
+
+      <!-- Model Selection -->
+      <div class="model-selection">
+        <label for="modelSelect">Modelo de IA:</label>
+        <select id="modelSelect" onchange="changeModel()">
+          <option value="deepseek" selected>DeepSeek Chat (Más rápido y confiable)</option>
+          <option value="llama">Llama 3.2 (Alternativo)</option>
+          <option value="gemma">Gemma 2 (Compacto)</option>
+          <option value="fallback">Solo respuestas básicas</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -73,6 +89,13 @@
 
 <script>
 let isWaitingForResponse = false;
+let currentConversationId = null;
+
+// Initialize chatbot when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('userInput').focus();
+  loadConversations();
+});
 
 function sendMessage() {
   const userInput = document.getElementById('userInput');
@@ -90,18 +113,25 @@ function sendMessage() {
   // Show typing indicator
   showTypingIndicator();
 
-  // Send to API with selected model
+  // Send to API with selected model and conversation ID
   const selectedModel = document.getElementById('modelSelect').value;
+  const requestData = {
+    message: message,
+    model: selectedModel
+  };
+
+  // Include conversation ID if we have one
+  if (currentConversationId) {
+    requestData.conversation_id = currentConversationId;
+  }
+
   fetch('/learning/api/chatbot/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
     },
-    body: JSON.stringify({
-      message: message,
-      model: selectedModel
-    })
+    body: JSON.stringify(requestData)
   })
   .then(response => response.json())
   .then(data => {
@@ -109,6 +139,12 @@ function sendMessage() {
     hideTypingIndicator();
 
     if (data.success) {
+      // Update current conversation ID if this was a new conversation
+      if (data.conversation_id && !currentConversationId) {
+        currentConversationId = data.conversation_id;
+        loadConversations(); // Refresh the conversations list
+      }
+
       // Add bot response
       addBotResponse(data);
     } else {
@@ -270,6 +306,199 @@ function changeModel() {
 
   console.log('Model changed to:', selectedModel);
 }
+
+// Conversation management functions
+function loadConversations() {
+  fetch('/learning/api/chatbot/conversations/')
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const conversationSelect = document.getElementById('conversationSelect');
+        conversationSelect.innerHTML = '<option value="">Nueva conversación</option>';
+
+        data.conversations.forEach(conv => {
+          const option = document.createElement('option');
+          option.value = conv.id;
+          option.textContent = `${conv.title} (${conv.message_count} mensajes)`;
+          conversationSelect.appendChild(option);
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error loading conversations:', error);
+    });
+}
+
+function createNewConversation() {
+  fetch('/learning/api/chatbot/conversations/new/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+    },
+    body: JSON.stringify({})
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      currentConversationId = data.conversation_id;
+      loadConversations(); // Refresh the list
+
+      // Clear chat and start fresh
+      clearChat();
+
+      // Show success message
+      showNotification('Nueva conversación creada', 'success');
+    } else {
+      showNotification('Error al crear conversación', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error creating conversation:', error);
+    showNotification('Error al crear conversación', 'error');
+  });
+}
+
+function loadConversation() {
+  const conversationSelect = document.getElementById('conversationSelect');
+  const selectedValue = conversationSelect.value;
+
+  if (!selectedValue) {
+    // New conversation
+    currentConversationId = null;
+    clearChat();
+    document.getElementById('deleteConversationBtn').style.display = 'none';
+    return;
+  }
+
+  // Load existing conversation
+  currentConversationId = selectedValue;
+  document.getElementById('deleteConversationBtn').style.display = 'inline-block';
+
+  fetch(`/learning/api/chatbot/conversations/${currentConversationId}/`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Clear current chat
+        document.getElementById('chatMessages').innerHTML = '';
+
+        // Add all messages from the conversation
+        data.messages.forEach(msg => {
+          if (msg.user_message) {
+            addMessage(msg.user_message, 'user');
+          }
+
+          if (msg.bot_response_guarani) {
+            addBotResponse({
+              response_guarani: msg.bot_response_guarani,
+              response_spanish: msg.bot_response_spanish,
+              explanation: msg.explanation,
+              new_words: msg.new_words
+            });
+          }
+        });
+
+        // Scroll to bottom
+        scrollToBottom();
+      } else {
+        showNotification('Error al cargar conversación', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error loading conversation:', error);
+      showNotification('Error al cargar conversación', 'error');
+    });
+}
+
+function deleteConversation() {
+  if (!currentConversationId) return;
+
+  if (!confirm('¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.')) {
+    return;
+  }
+
+  fetch(`/learning/api/chatbot/conversations/${currentConversationId}/delete/`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      currentConversationId = null;
+      loadConversations(); // Refresh the list
+      clearChat(); // Clear the chat
+      document.getElementById('deleteConversationBtn').style.display = 'none';
+      showNotification('Conversación eliminada', 'success');
+    } else {
+      showNotification('Error al eliminar conversación', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error deleting conversation:', error);
+    showNotification('Error al eliminar conversación', 'error');
+  });
+}
+
+function showNotification(message, type) {
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+
+  // Add styles for notification
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    animation: slideInRight 0.3s ease-out;
+    ${type === 'success' ? 'background: #22c55e;' : 'background: #ef4444;'}
+  `;
+
+  document.body.appendChild(notification);
+
+  // Remove notification after 3 seconds
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease-out';
+    setTimeout(() => {
+      document.body.removeChild(notification);
+    }, 300);
+  }, 3000);
+}
+
+// Add CSS animations for notifications
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideOutRight {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+`;
+document.head.appendChild(style);
 </script>
 
 <style>
@@ -544,6 +773,97 @@ function changeModel() {
 .chatbot-tips li {
   margin-bottom: 6px;
   color: var(--text-secondary);
+}
+
+/* Conversation Management Styling */
+.conversation-management {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.conversation-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.conversation-selector label {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+#conversationSelect {
+  padding: 8px 12px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+#conversationSelect:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+#conversationSelect:hover {
+  border-color: var(--primary-color);
+}
+
+:root[data-theme="dark"] #conversationSelect {
+  background: var(--surface);
+  border-color: rgba(255,255,255,0.12);
+}
+
+:root[data-theme="dark"] #conversationSelect option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.conversation-selector button {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.conversation-selector button:hover {
+  background: #1565c0;
+  transform: scale(1.05);
+}
+
+.conversation-selector button:disabled {
+  background: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
+}
+
+#deleteConversationBtn {
+  background: #dc2626;
+}
+
+#deleteConversationBtn:hover {
+  background: #b91c1c;
 }
 
 /* Model Selection Styling */
