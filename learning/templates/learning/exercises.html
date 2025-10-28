@@ -1,71 +1,53 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'learning/css/modern.css' %}">
+{% endblock %}
+
 {% block content %}
+<div class="dashboard-container">
+    <header class="dashboard-header">
+        <h1>Ejercicios</h1>
+        <p>Pon a prueba tus conocimientos con diferentes tipos de ejercicios.</p>
+    </header>
 
-  <section style="text-align:center;margin:26px 0 18px;">
-    <h1>Ejercicios Interactivos</h1>
-    <p class="lead">Practica y refuerza tus conocimientos de guaraní con una variedad de actividades. ¡Elige una y comienza!</p>
-  </section>
+    <div class="dashboard-grid">
+        <a href="{% url 'fill_blank_exercise' %}" class="dashboard-card">
+            <div class="card-header">
+                <h2>Completar Espacios</h2>
+            </div>
+            <div class="card-body">
+                <p>Completa las oraciones con la palabra correcta.</p>
+            </div>
+        </a>
 
-  <!-- Exercise Types Grid -->
-  <section class="exercise-grid">
+        <a href="{% url 'multiple_choice_exercise' %}" class="dashboard-card">
+            <div class="card-header">
+                <h2>Opción Múltiple</h2>
+            </div>
+            <div class="card-body">
+                <p>Elige la respuesta correcta entre varias opciones.</p>
+            </div>
+        </a>
 
+        <a href="{% url 'matching_exercise' %}" class="dashboard-card">
+            <div class="card-header">
+                <h2>Emparejamiento</h2>
+            </div>
+            <div class="card-body">
+                <p>Empareja las palabras en Guaraní con sus traducciones en Español.</p>
+            </div>
+        </a>
 
-    <!-- Completar Espacios -->
-    <div class="exercise-card" onclick="window.location.href='/learning/exercises/fill-blank/'">
-      <div class="exercise-icon">□</div>
-      <h3 class="exercise-title">Completar Espacios</h3>
-      <p class="exercise-description">Rellena los espacios en blanco con las palabras correctas.</p>
+        <a href="{% url 'pronunciation_exercise' %}" class="dashboard-card">
+            <div class="card-header">
+                <h2>Pronunciación</h2>
+            </div>
+            <div class="card-body">
+                <p>Practica tu pronunciación y recibe una puntuación.</p>
+            </div>
+        </a>
     </div>
-
-    <!-- Chatbot Guaraní -->
-    <div class="exercise-card" onclick="window.location.href='/learning/chatbot/'">
-      <div class="exercise-icon">💬</div>
-      <h3 class="exercise-title">Chatbot Guaraní</h3>
-      <p class="exercise-description">Practica guaraní conversando con un profesor virtual.</p>
-    </div>
-
-    <!-- Escucha y Responde -->
-    <div class="exercise-card">
-      <div class="exercise-icon">🔊</div>
-      <h3 class="exercise-title">Escucha y Responde</h3>
-      <p class="exercise-description">Escucha una frase y selecciona la respuesta correcta.</p>
-      <button class="exercise-btn">Abrir</button>
-    </div>
-
-    <!-- Traducción -->
-    <div class="exercise-card">
-      <div class="exercise-icon">↔</div>
-      <h3 class="exercise-title">Traducción</h3>
-      <p class="exercise-description">Traduce frases del español al guaraní y viceversa.</p>
-      <button class="exercise-btn">Abrir</button>
-    </div>
-  </section>
-
-  <!-- Featured Exercise Section -->
-  <section class="featured-exercise">
-    <div class="featured-card">
-      <div class="featured-content">
-        <div class="featured-icon">🎤</div>
-        <div class="featured-text">
-          <h3>Pronunciación</h3>
-          <p>Practica la pronunciación de palabras y frases en guaraní con tu micrófono.</p>
-        </div>
-        <button class="featured-btn">Empezar</button>
-      </div>
-      <div class="featured-visual">
-        <div class="waveform-lines">
-          <div class="wave-line"></div>
-          <div class="wave-line"></div>
-          <div class="wave-line"></div>
-          <div class="wave-line"></div>
-          <div class="wave-line"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div style="max-width:360px;margin:24px auto;">
-    <a class="qx-btn btn-full" href="{% url 'lessons_overview' %}">Comenzar Ejercicios</a>
-  </div>
-
+</div>
 {% endblock %}

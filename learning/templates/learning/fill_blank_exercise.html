@@ -1,318 +1,39 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'learning/css/modern.css' %}">
+{% endblock %}
+
 {% block content %}
+<div class="dashboard-container">
+    <header class="dashboard-header">
+        <h1>Completar Espacios</h1>
+        <p>Rellena los espacios en blanco con las palabras correctas en guaraní.</p>
+    </header>
 
-<div class="fill-blank-container">
-  <div class="exercise-header">
-    <h1>□ Completar Espacios</h1>
-    <p class="exercise-subtitle">Rellena los espacios en blanco con las palabras correctas en guaraní</p>
-  </div>
-
-  <div class="exercises-list">
     {% for exercise in exercises %}
-    <div class="exercise-item" data-exercise-id="{{ exercise.id }}">
-      <div class="exercise-content">
-        <div class="exercise-instruction">
-          <h3>Completa la oración:</h3>
+    <div class="dashboard-card" style="margin-bottom: 2rem;">
+        <div class="card-body">
+            <p style="font-size: 1.2rem;">{{ exercise.prompt_text|safe|replace:"___"|add:"<input type='text' class='fill-blank-input' id='answer-{{ exercise.id }}' />"|safe }}</p>
+            <button class="button-primary" onclick="checkAnswer({{ exercise.id }}, '{{ exercise.correct_answer }}')">Verificar</button>
+            <div id="feedback-{{ exercise.id }}" style="margin-top: 1rem;"></div>
         </div>
-
-        <div class="exercise-area">
-          <div class="fill-blank-sentence" id="sentence-{{ exercise.id }}">
-            {{ exercise.prompt_text|safe }}
-          </div>
-
-          {% if exercise.hint %}
-          <div class="exercise-hint">
-            <span class="hint-icon">💡</span>
-            <span class="hint-text">{{ exercise.hint }}</span>
-          </div>
-          {% endif %}
-        </div>
-
-        <div class="exercise-actions">
-          <button class="btn-check" onclick="checkAnswer({{ exercise.id }})">
-            ✅ Verificar
-          </button>
-          <button class="btn-reset" onclick="resetExercise({{ exercise.id }})">
-            🔄 Reiniciar
-          </button>
-        </div>
-
-        <div class="exercise-feedback" id="feedback-{{ exercise.id }}" style="display: none;">
-          <!-- El feedback aparecerá aquí -->
-        </div>
-      </div>
     </div>
     {% endfor %}
-  </div>
-
-  <div class="exercise-footer">
-    <a href="{% url 'exercises' %}" class="btn-back">
-      ← Volver a Ejercicios
-    </a>
-  </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function checkAnswer(exerciseId) {
-  const input = document.querySelector(`.blank-input[data-exercise-id="${exerciseId}"]`);
-  if (!input) return;
-
-  const userAnswer = input.value.trim();
-  if (!userAnswer) {
-    showFeedback(exerciseId, 'incomplete', 'Por favor escribe una palabra antes de verificar.');
-    return;
-  }
-
-  // Get the correct answer from the exercise data
-  const correctAnswers = {
-    {% for exercise in exercises %}
-      {{ exercise.id }}: "{{ exercise.correct_answer }}",
-    {% endfor %}
-  };
-
-  const correctAnswer = correctAnswers[exerciseId];
-  const isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
-
-  if (isCorrect) {
-    showFeedback(exerciseId, 'success', `¡Correcto! "${userAnswer}" es la respuesta correcta.`);
-    input.classList.add('correct');
-  } else {
-    showFeedback(exerciseId, 'error', `La respuesta correcta es "${correctAnswer}". ¡Inténtalo de nuevo!`);
-    input.classList.add('incorrect');
-  }
-}
-
-function resetExercise(exerciseId) {
-  const input = document.querySelector(`.blank-input[data-exercise-id="${exerciseId}"]`);
-  if (!input) return;
-
-  input.value = '';
-  input.classList.remove('correct', 'incorrect');
-
-  const feedback = document.getElementById(`feedback-${exerciseId}`);
-  if (feedback) {
-    feedback.style.display = 'none';
-  }
-}
-
-function showFeedback(exerciseId, type, message) {
-  const feedback = document.getElementById(`feedback-${exerciseId}`);
-  if (!feedback) return;
-
-  feedback.style.display = 'block';
-  feedback.className = `exercise-feedback ${type}`;
-
-  let icon = '';
-  switch (type) {
-    case 'success': icon = '🎉'; break;
-    case 'error': icon = '💪'; break;
-    case 'incomplete': icon = '📝'; break;
-  }
-
-  feedback.innerHTML = `
-    <div class="feedback-content">
-      <span class="feedback-icon">${icon}</span>
-      <span class="feedback-message">${message}</span>
-    </div>
-  `;
-}
-
-// Initialize functions when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-  // Process each exercise to create input fields for blanks
-  {% for exercise in exercises %}
-    const sentenceElement = document.getElementById('sentence-{{ exercise.id }}');
-    if (sentenceElement) {
-      const text = sentenceElement.textContent;
-      // Replace underscores with input fields
-      const processedText = text.replace(/___+/g, function(match) {
-        return `<input type="text" class="blank-input" data-exercise-id="{{ exercise.id }}" placeholder="Escribe aquí..." maxlength="20">`;
-      });
-      sentenceElement.innerHTML = processedText;
+    function checkAnswer(exerciseId, correctAnswer) {
+        const userAnswer = document.getElementById(`answer-${exerciseId}`).value;
+        const feedbackDiv = document.getElementById(`feedback-${exerciseId}`);
+        if (userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase()) {
+            feedbackDiv.innerHTML = '<p style="color: green;">¡Correcto!</p>';
+        } else {
+            feedbackDiv.innerHTML = `<p style="color: red;">Incorrecto. La respuesta correcta es: ${correctAnswer}</p>`;
+        }
     }
-  {% endfor %}
-
-  // Add enter key support for inputs
-  const inputs = document.querySelectorAll('.blank-input');
-  inputs.forEach(input => {
-    input.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        const exerciseId = this.getAttribute('data-exercise-id');
-        checkAnswer(exerciseId);
-      }
-    });
-  });
-});
 </script>
-
-<style>
-.fill-blank-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.exercise-item {
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.fill-blank-sentence {
-  font-size: 1.2em;
-  line-height: 1.6;
-  margin: 20px 0;
-  padding: 20px;
-  background: var(--input-bg);
-  border-radius: 8px;
-  border: 2px dashed var(--border-color);
-}
-
-.blank-input {
-  background: white;
-  border: 2px solid var(--primary-color);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 1em;
-  margin: 0 4px;
-  min-width: 120px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-.blank-input:focus {
-  outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
-}
-
-.blank-input.correct {
-  border-color: var(--success-color);
-  background: rgba(76, 175, 80, 0.1);
-}
-
-.blank-input.incorrect {
-  border-color: var(--error-color);
-  background: rgba(244, 67, 54, 0.1);
-}
-
-.sentence-word {
-  margin: 0 4px;
-  color: var(--text-primary);
-}
-
-.exercise-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 12px;
-  background: rgba(255, 193, 7, 0.1);
-  border-radius: 6px;
-  border-left: 4px solid #ffc107;
-}
-
-.hint-icon {
-  font-size: 1.2em;
-}
-
-.hint-text {
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-.exercise-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.btn-check, .btn-reset {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 1em;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn-check {
-  background: var(--success-color);
-  color: white;
-}
-
-.btn-check:hover {
-  background: #43a047;
-  transform: translateY(-1px);
-}
-
-.btn-reset {
-  background: var(--secondary-color);
-  color: white;
-}
-
-.btn-reset:hover {
-  background: #616161;
-  transform: translateY(-1px);
-}
-
-.exercise-feedback {
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 1em;
-}
-
-.exercise-feedback.success {
-  background: rgba(76, 175, 80, 0.1);
-  border: 1px solid var(--success-color);
-  color: var(--success-color);
-}
-
-.exercise-feedback.error {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid var(--error-color);
-  color: var(--error-color);
-}
-
-.exercise-feedback.incomplete {
-  background: rgba(255, 193, 7, 0.1);
-  border: 1px solid #ffc107;
-  color: #ff6f00;
-}
-
-.feedback-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.feedback-icon {
-  font-size: 1.2em;
-}
-
-.btn-back {
-  display: inline-block;
-  margin-top: 20px;
-  padding: 12px 24px;
-  background: var(--primary-color);
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.btn-back:hover {
-  background: #1565c0;
-  transform: translateY(-1px);
-}
-</style>
-
 {% endblock %}
