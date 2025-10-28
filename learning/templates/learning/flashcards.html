@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'learning/css/modern_flashcards.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="flashcards-container">
+    <header class="flashcards-header">
+        <h1>Flashcards de Guaraní</h1>
+        <p>Practica tu vocabulario con estas tarjetas interactivas.</p>
+    </header>
+
+    <div class="flashcard-deck">
+        {% for entry in entries %}
+        <div class="flashcard" onclick="this.classList.toggle('is-flipped');">
+            <div class="flashcard-inner">
+                <div class="flashcard-front">
+                    <div class="flashcard-content">
+                        <h2>{{ entry.translated_text_gn }}</h2>
+                        <button class="tts-button" onclick="event.stopPropagation(); ttsSpeak('{{ entry.translated_text_gn|escapejs }}', 'gn', 'suave');">🔊</button>
+                    </div>
+                </div>
+                <div class="flashcard-back">
+                    <div class="flashcard-content">
+                        <h2>{{ entry.source_text_es }}</h2>
+                        <button class="tts-button" onclick="event.stopPropagation(); ttsSpeak('{{ entry.source_text_es|escapejs }}', 'es', 'suave');">🔊</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="no-flashcards">
+            <p>No hay palabras en tu glosario. <a href="{% url 'glossary' %}">Agrega algunas</a> para empezar a practicar.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="flashcards-controls">
+        <button class="button-primary" onclick="prevCard()">Anterior</button>
+        <button class="button-primary" onclick="nextCard()">Siguiente</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/tts.js' %}"></script>
+<script>
+    let currentCard = 0;
+    const cards = document.querySelectorAll('.flashcard');
+
+    function showCard(index) {
+        cards.forEach((card, i) => {
+            card.style.display = i === index ? 'block' : 'none';
+        });
+    }
+
+    function nextCard() {
+        currentCard = (currentCard + 1) % cards.length;
+        showCard(currentCard);
+    }
+
+    function prevCard() {
+        currentCard = (currentCard - 1 + cards.length) % cards.length;
+        showCard(currentCard);
+    }
+
+    if (cards.length > 0) {
+        showCard(currentCard);
+    }
+</script>
+{% endblock %}
