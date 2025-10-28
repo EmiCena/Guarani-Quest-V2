@@ -6,6 +6,7 @@ urlpatterns = [
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path("lessons/<int:pk>/", views.lesson_detail, name="lesson_detail"),
     path("glossary/", views.glossary_view, name="glossary"),
+    path("flashcards/", views.flashcards_view, name="flashcards"),
 
     # APIs
     path("api/translate-and-add/", views.api_translate_and_add, name="api_translate_and_add"),
@@ -32,6 +33,9 @@ path("api/srs/set-mode/", views.api_srs_set_mode, name="api_srs_set_mode"),
 
     path("exercises/", views.exercises_view, name="exercises"),
     path("exercises/fill-blank/", views.fill_blank_exercise, name="fill_blank_exercise"),
+    path("exercises/multiple-choice/", views.multiple_choice_exercise, name="multiple_choice_exercise"),
+    path("exercises/matching/", views.matching_exercise, name="matching_exercise"),
+    path("exercises/pronunciation/", views.pronunciation_exercise, name="pronunciation_exercise"),
     path("chatbot/", views.chatbot_view, name="chatbot"),
     path("lessons/", views.lessons_overview, name="lessons_overview"),
     

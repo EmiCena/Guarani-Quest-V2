@@ -996,6 +996,12 @@ def lesson_detail(request, pk):
 
 
 @login_required
+def flashcards_view(request):
+    entries = GlossaryEntry.objects.filter(user=request.user).order_by("-created_at")
+    return render(request, "learning/flashcards.html", {"entries": entries})
+
+
+@login_required
 def glossary_view(request):
     # Get pagination parameters
     page = int(request.GET.get('page', 1))
@@ -1514,6 +1520,22 @@ def api_glossary_toggle_favorite(request, entry_id):
 def exercises_view(request):
   return render(request, "learning/exercises.html")
 
+
+@login_required
+def multiple_choice_exercise(request):
+    return render(request, "learning/coming_soon.html")
+
+
+@login_required
+def matching_exercise(request):
+    return render(request, "learning/coming_soon.html")
+
+
+@login_required
+def pronunciation_exercise(request):
+    return render(request, "learning/coming_soon.html")
+
+
 @login_required
 def chatbot_view(request):
     """Chatbot interface for practicing Guaraní"""
@@ -1659,6 +1681,22 @@ def api_chatbot_delete_conversation(request, conversation_id):
 def api_chatbot(request):
     """API endpoint for chatbot conversations using OpenRouter AI"""
     user_message = request.data.get("message", "").strip()
+    if not user_message:
+        return Response({"error": "No message provided"}, status=400)
+
+    try:
+        if not openrouter_ai.api_key:
+            return get_fallback_response(user_message)
+
+        result = openrouter_ai.chatbot_response(user_message)
+        if result:
+            return Response({"response_guarani": result}, status=200)
+        else:
+            return get_fallback_response(user_message)
+
+    except Exception as e:
+        logger.error(f"Chatbot API error: {str(e)}")
+        return get_fallback_response(user_message)
     selected_model = request.data.get("model", "llama")  # Default to Llama
     conversation_id = request.data.get("conversation_id")  # Optional conversation ID
 
